@@ -39,7 +39,7 @@ except Exception as e:
     st.error(f"Não foi possível carregar as imagens: {e}")
 
 # CEBEÇALHO INÍCIO
-st.markdown('<h1 style="color: orange;">Painel de Resultados 📈</h1>', unsafe_allow_html=True)
+st.markdown('<h1 style="color: orange;">Painel de Resultados 📈 AHHHH</h1>', unsafe_allow_html=True)
 st.markdown('''Painel para Acompanhamento de Metas Estratégicas - OKR's''')
 st.markdown('''Painel de Resultados BI Até 2024 https://app.powerbi.com/view?r=eyJrIjoiYjM0YTU4OWItNGEwOS00MGZkLWE1NGMtYTQyZWM5OGYzYjNiIiwidCI6Ijk5MWEwMGM5LTY1ZGUtNDFjMS04YzUxLTI3N2Q4YzEwZmNkYSJ9''')
 # CEBEÇALHO FIM
