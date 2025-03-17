@@ -20,7 +20,7 @@ import time
 import webview
 
 def start_streamlit():
-    home_file = resource_path("home.py")
+    home_file = resource_path("1_🏠_home.py")
     subprocess.run([
         "streamlit", "run",
         home_file,
