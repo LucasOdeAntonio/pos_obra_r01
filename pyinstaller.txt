@@ -1,0 +1,18 @@
+pyinstaller --onefile --noconsole --paths=. `
+  --add-data "home.py;." `
+  --add-data "pages;pages" `
+  --add-data "Home.jpg;." `
+  --add-data "LOGO_VR.png;." `
+  --add-data "LOGO_VR_REDUZIDA.png;." `
+  --add-data "planilha_home.csv;." `
+  --add-data "planilha_home.xlsx;." `
+  --add-data "requirements.txt;." `
+  app_desktop.py
+
+
+
+
+Remove-Item -Recurse -Force .\build
+Remove-Item -Recurse -Force .\dist
+Remove-Item -Force .\app_desktop.spec
+
