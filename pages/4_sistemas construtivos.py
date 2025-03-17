@@ -24,7 +24,6 @@ import random
 from datetime import date
 from PIL import Image
 
-
 # =========================================
 # Funções de Cores e Classificação ABC
 # =========================================
@@ -199,8 +198,9 @@ with row1[2]:
     mes_filter_options = [meses[m] for m in sorted(df_eng["Data de Abertura"].dt.month.unique())]
     mes_filter = st.multiselect("Mês de Abertura", options=mes_filter_options, default=[])
 with row1[3]:
+    # Modificação para evitar tipos mistos e valores nulos na coluna "Responsável"
     if "Responsável" in df_eng.columns:
-    responsavel_options = sorted(df_eng["Responsável"].dropna().astype(str).unique())
+        responsavel_options = sorted(df_eng["Responsável"].dropna().astype(str).unique())
     else:
         responsavel_options = []
     responsavel_filter = st.multiselect("Responsável", options=responsavel_options, default=[])
