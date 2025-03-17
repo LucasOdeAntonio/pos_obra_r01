@@ -31,7 +31,11 @@ st.set_page_config(
 )
 
 # Configurar o locale para formato brasileiro
-locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+except locale.Error:
+    st.warning("Locale 'pt_BR.UTF-8' não disponível. Utilizando o locale padrão do sistema.")
+    locale.setlocale(locale.LC_ALL, '')
 
 # Carregar os logos usando resource_path e PIL
 logo_horizontal_path = resource_path("LOGO_VR.png")
