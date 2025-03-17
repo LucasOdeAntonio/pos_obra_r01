@@ -199,7 +199,11 @@ with row1[2]:
     mes_filter_options = [meses[m] for m in sorted(df_eng["Data de Abertura"].dt.month.unique())]
     mes_filter = st.multiselect("Mês de Abertura", options=mes_filter_options, default=[])
 with row1[3]:
-    responsavel_filter = st.multiselect("Responsável", options=sorted(df_eng["Responsável"].unique()) if "Responsável" in df_eng.columns else [], default=[])
+    if "Responsável" in df_eng.columns:
+    responsavel_options = sorted(df_eng["Responsável"].dropna().astype(str).unique())
+    else:
+        responsavel_options = []
+    responsavel_filter = st.multiselect("Responsável", options=responsavel_options, default=[])
 
 # Row2 para os demais filtros
 row2 = st.columns(3)
