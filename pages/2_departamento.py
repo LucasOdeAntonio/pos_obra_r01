@@ -50,10 +50,10 @@ except Exception as e:
     
 # CEBEÇALHO INÍCIO ===========================================================================================================================
 #st.image("LOGO_VR.png", caption="") - pra adicionar imagens
-st.markdown('<h1 style="color: orange;">PAINEL GERENCIAL TESTE 1🚩</h1>', unsafe_allow_html=True)
+st.markdown('<h1 style="color: orange;">PAINEL do DEPARTAMENTO🚩</h1>', unsafe_allow_html=True)
 
 st.markdown('''
-       Acompanhamento de Cadastro Físico de Empreendimentos para Planejamento ''')
+       Página em Construão ''')
 # CEBEÇALHO FIM ===============================================================================================================================
 
 # BASE DO EXCEL =================================================================================================================
