@@ -51,3 +51,4 @@ tzdata
 urllib3
 watchdog
 Werkzeug
+XlsxWriter
