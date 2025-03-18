@@ -1,5 +1,10 @@
 id;id_pai;codigo_sequencia;Status;Projeto;Tipo de Serviço;Data Início Obra (Prevista);Data Entrega Obra (Prevista);Limite p/ Contratação;Data Início Contrapartida (Previsto);Data Início Contrapartida (Real);Data Término Contrapartida (Previsto);Data Término Contrapartida (Real);Valor Viabilidade;Orçamento;% Execução;Gasto Real;Comentários;Modo de Medição
-1;;1;Planejamento;Contrapartida Teste;Reforma Teste;2023-01-20;2025-10-20;2025-03-18;2025-04-01;;2025-09-20;;1500000.0;1200000.0;0.0;0.0;Obra Teste;Por % Execução
-2;1;1.1;Em Andamento;Etapa Teste 1;Planejamento e Contratação;2023-01-20;2023-01-20;2025-03-18;2025-04-01;;2025-05-01;;200000.0;0.0;0.0;0.0;Subetapa 01;Por % Execução
-3;1;1.2;Planejamento;Subetapa teste 2;Fundação;2023-01-01;2025-10-20;2025-03-18;2025-05-02;;2025-06-20;;2000000.0;350000.0;0.0;0.0;Fundação;Por % Execução
-4;1;1.3;Planejamento;Contrapartida Teste;Estrutura;2023-01-20;2025-10-20;2025-03-18;2025-06-21;;2025-09-20;;2000000.0;1650000.0;0.0;0.0;Comentario 3.;Por % Execução
+1;;1.0;Planejamento;Contrapartida Teste;Reforma Teste;2023-01-20;2025-10-20;2025-03-18;2025-04-01;;2025-09-20;;1500000.0;1200000.0;0.0;0.0;Obra Teste;Por % Execução
+2;1.0;1.1;Em Andamento;Etapa Teste 1;Planejamento e Contratação;2023-01-20;2023-01-20;2025-03-18;2025-04-01;;2025-05-01;;200000.0;0.0;0.0;0.0;Subetapa 01;Por % Execução
+3;1.0;1.2;Planejamento;Subetapa teste 2;Fundação;2023-01-01;2025-10-20;2025-03-18;2025-05-02;;2025-06-20;;2000000.0;350000.0;0.0;0.0;Fundação;Por % Execução
+4;1.0;1.3;Planejamento;Contrapartida Teste;Estrutura;2023-01-20;2025-10-20;2025-03-18;2025-06-21;;2025-09-20;;2000000.0;1650000.0;0.0;0.0;Comentario 3.;Por % Execução
+5;;5.0;Em Andamento;Contrapartida 2;Ampliação;2025-03-18;2025-03-18;2025-03-18;2025-03-18;;2025-07-18;;1800000.0;860000.0;20.0;172000.0;;Por % Execução
+6;5.0;5.1;Concluído;Contrapartida 2;Radier;;;2025-03-18;2025-03-18;;2025-04-18;;0.0;172000.0;100.0;172000.0;;Por % Execução
+7;5.0;5.2;Em Andamento;Contrapartida 2;Alvenarias;;;2025-03-18;2025-04-18;;2025-07-18;;0.0;0.0;0.0;0.0;;Por % Execução
+8;;8.0;Concluído;Contrapartida 3;Putaria;2025-03-18;2025-03-18;2025-03-18;2025-03-18;;2025-12-18;;1000000.0;980000.0;0.0;0.0;;Por % Execução
+9;8.0;8.1;Planejamento;Contrapartida 3;;;;2025-03-18;2025-03-18;;2025-12-18;;0.0;0.0;0.0;0.0;;Por % Execução

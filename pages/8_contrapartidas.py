@@ -1,3 +1,21 @@
+import sys
+import os
+
+# Adiciona o diretório extraído em modo frozen ao sys.path
+if getattr(sys, 'frozen', False):
+    sys.path.insert(0, sys._MEIPASS)
+else:
+    sys.path.insert(0, os.path.dirname(__file__))
+
+# Incorpora a função resource_path (conteúdo de utils.py)
+def resource_path(relative_path):
+    """
+    Retorna o caminho absoluto de 'relative_path', seja em desenvolvimento ou quando empacotado.
+    """
+    if getattr(sys, 'frozen', False):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(__file__), relative_path)
+
 import streamlit as st
 import pandas as pd
 import datetime
@@ -6,18 +24,34 @@ import plotly.express as px
 import plotly.graph_objects as go
 import os
 from io import BytesIO
+from PIL import Image
 
 # ------------------------------------------------------------------------------
 # Configura a página para ocupar toda a largura
 # ------------------------------------------------------------------------------
-st.set_page_config(layout="wide")
+st.set_page_config(
+    page_icon=resource_path("Home.jpg"),
+    layout='wide',
+    page_title="Pós Obra - Contrapartidas"
+)
+
+# Carregar os logos usando resource_path e PIL
+logo_horizontal_path = resource_path("LOGO_VR.png")
+logo_reduzida_path   = resource_path("LOGO_VR_REDUZIDA.png")
+
+try:
+    logo_horizontal = Image.open(logo_horizontal_path)
+    logo_reduzida   = Image.open(logo_reduzida_path)
+    st.logo(image=logo_horizontal, size="large", icon_image=logo_reduzida)
+except Exception as e:
+    st.error(f"Não foi possível carregar as imagens: {e}")
 
 # ------------------------------------------------------------------------------
 # Credenciais de exemplo (para produção, utilize um método mais seguro)
 # ------------------------------------------------------------------------------
 USERS = {
-    "admin": "1234",
-    "gerente": "senha"
+    "lucas.oliveira": "lucas123",
+    "sergio.lopes": "sergio123"
 }
 
 # ------------------------------------------------------------------------------
@@ -75,28 +109,23 @@ def persist_data():
 # ------------------------------------------------------------------------------
 if "df_principal" not in st.session_state:
     st.session_state.df_principal = load_data()
-
 if "editing_enabled" not in st.session_state:
     st.session_state.editing_enabled = False
-
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-
 if "show_login" not in st.session_state:
     st.session_state.show_login = False
-
 if "versoes" not in st.session_state:
     st.session_state.versoes = []
-
 if "last_version" not in st.session_state:
     st.session_state.last_version = st.session_state.df_principal.copy()
-
-# Variáveis para controle de edição inline
 if "edit_in_progress" not in st.session_state:
     st.session_state.edit_in_progress = False
-
 if "edit_idx" not in st.session_state:
     st.session_state.edit_idx = None
+# Dicionário para armazenar a distribuição de desembolso por projeto
+if "desembolso" not in st.session_state:
+    st.session_state.desembolso = {}
 
 # ------------------------------------------------------------------------------
 # Sidebar: Controle de Edição com Login
@@ -190,7 +219,7 @@ def adicionar_subetapa_callback(projeto_id):
         "id_pai": projeto_id,
         "codigo_sequencia": novo_codigo,
         "Status": "Planejamento",
-        "Projeto": parent["Projeto"],  # O mesmo nome do projeto pai
+        "Projeto": parent["Projeto"],
         "Tipo de Serviço": "",
         "Data Início Obra (Prevista)": None,
         "Data Entrega Obra (Prevista)": None,
@@ -199,7 +228,7 @@ def adicionar_subetapa_callback(projeto_id):
         "Data Início Contrapartida (Real)": None,
         "Data Término Contrapartida (Previsto)": parent["Data Término Contrapartida (Previsto)"],
         "Data Término Contrapartida (Real)": None,
-        "Valor Viabilidade": 0,  # Não utilizado nas subetapas
+        "Valor Viabilidade": 0,
         "Orçamento": 0,
         "% Execução": 0,
         "Gasto Real": 0,
@@ -224,62 +253,45 @@ def cancelar_edicao():
 def exibir_form_edicao_inline(idx):
     df = st.session_state.df_principal
     row = df.loc[idx]
-    
     st.markdown("##### Editando registro")
     with st.form(key=f"form_edicao_{idx}"):
-        # Se for etapa (não tem pai), permitir editar Projeto; senão, apenas exibir como texto.
         if pd.isnull(row.get("id_pai")):
             novo_projeto = st.text_input("Projeto", value=row.get("Projeto", ""))
         else:
             st.write("Projeto:", row.get("Projeto", ""))
             novo_projeto = row.get("Projeto", "")
-        
         novo_tipo = st.text_input("Tipo de Serviço", value=row.get("Tipo de Serviço", ""))
         status_options = ["Planejamento", "Em Andamento", "Concluído"]
         status_index = status_options.index(row["Status"]) if row["Status"] in status_options else 0
         novo_status = st.selectbox("Status", status_options, index=status_index)
-        
-        # Não exibe os campos de Obra (Início/Entrega). Somente Contrapartida/Subetapa
         default_inicio_cont = row.get("Data Início Contrapartida (Previsto)")
         default_inicio_cont_str = formatar_data(default_inicio_cont) if default_inicio_cont else datetime.date.today().strftime("%d/%m/%Y")
-        # Se for subetapa, renomeia o rótulo:
         label_inicio = "Data Início Contrapartida (Previsto)" if pd.isnull(row.get("id_pai")) else "Data Início Subetapa (Previsto)"
         novo_data_inicio_cont_prev_str = st.text_input(label_inicio, value=default_inicio_cont_str)
-        
         default_termino_cont = row.get("Data Término Contrapartida (Previsto)")
         default_termino_cont_str = formatar_data(default_termino_cont) if default_termino_cont else datetime.date.today().strftime("%d/%m/%Y")
         label_termino = "Data Término Contrapartida (Previsto)" if pd.isnull(row.get("id_pai")) else "Data Término Subetapa (Previsto)"
         novo_data_termino_cont_prev_str = st.text_input(label_termino, value=default_termino_cont_str)
-        
-        # Se for etapa, permite editar Viabilidade; para subetapas, não.
         if pd.isnull(row.get("id_pai")):
             novo_valor_viabilidade = st.number_input("Viabilidade", min_value=0.0, value=float(row.get("Valor Viabilidade", 0)), step=100.0)
         else:
             novo_valor_viabilidade = row.get("Valor Viabilidade", 0)
-        
         novo_orcamento = st.number_input("Orçamento", min_value=0.0, value=float(row.get("Orçamento", 0)), step=1000.0)
-        
         modo_atual = row.get("Modo de Medição", "Por % Execução")
         modo_options = ["Por % Execução", "Por Gasto Real"]
         modo_index = 0 if modo_atual == "Por % Execução" else 1
         modo_medicao = st.radio("Modo de Medição", options=modo_options, index=modo_index, key=f"modo_medicao_{idx}")
-        
         if modo_medicao == "Por % Execução":
             valor_exec = float(row.get("% Execução", 0))
-            novo_execucao = st.number_input("% Execução", min_value=0.0, max_value=100.0,
-                                            value=valor_exec, step=1.0, key=f"execucao_{idx}")
+            novo_execucao = st.number_input("% Execução", min_value=0.0, max_value=100.0, value=valor_exec, step=1.0, key=f"execucao_{idx}")
             gasto_calculado = round((novo_execucao/100.0) * novo_orcamento, 2)
             st.number_input("Gasto Real (calculado)", value=gasto_calculado, disabled=True, key=f"gasto_calc_{idx}")
         else:
             valor_gasto = float(row.get("Gasto Real", 0))
-            novo_gasto = st.number_input("Gasto Real", min_value=0.0,
-                                         value=valor_gasto, step=100.0, key=f"gasto_{idx}")
+            novo_gasto = st.number_input("Gasto Real", min_value=0.0, value=valor_gasto, step=100.0, key=f"gasto_{idx}")
             exec_calc = round((novo_gasto/novo_orcamento)*100, 2) if novo_orcamento > 0 else 0
             st.number_input("% Execução (calculado)", value=exec_calc, disabled=True, key=f"execucao_calc_{idx}")
-        
         novos_comentarios = st.text_area("Comentários", value=row.get("Comentários", ""))
-        
-        # Conversão das datas de Contrapartida/Subetapa
         try:
             novo_data_inicio_cont_prev = datetime.datetime.strptime(novo_data_inicio_cont_prev_str, "%d/%m/%Y").date()
         except Exception as e:
@@ -290,7 +302,6 @@ def exibir_form_edicao_inline(idx):
         except Exception as e:
             st.error(f"{label_termino} inválida. Utilize o formato DD/MM/YYYY.")
             return
-        
         col1, col2 = st.columns(2)
         with col1:
             if st.form_submit_button("Salvar Alterações"):
@@ -299,7 +310,6 @@ def exibir_form_edicao_inline(idx):
                 df.at[idx, "Status"] = novo_status
                 df.at[idx, "Data Início Contrapartida (Previsto)"] = novo_data_inicio_cont_prev
                 df.at[idx, "Data Término Contrapartida (Previsto)"] = novo_data_termino_cont_prev
-                # Se for etapa, atualiza Viabilidade; para subetapas, mantém o valor.
                 if pd.isnull(row.get("id_pai")):
                     df.at[idx, "Valor Viabilidade"] = novo_valor_viabilidade
                 df.at[idx, "Orçamento"] = novo_orcamento
@@ -324,17 +334,14 @@ def exibir_form_edicao_inline(idx):
 # Exibição do Cronograma Físico
 # ------------------------------------------------------------------------------
 def exibir_cronograma_fisico():
-    st.subheader("Cronograma Físico (Geral)")
+    st.subheader("⏱️Cronograma Físico")
     if st.session_state.editing_enabled:
         if st.button("Adicionar Projeto", on_click=adicionar_projeto_callback):
             pass
-
     df = st.session_state.df_principal
     if df.empty:
         st.info("Nenhum projeto cadastrado. Utilize 'Adicionar Projeto' para incluir.")
         return
-
-    # Exibição das etapas (projetos sem pai)
     principais = df[df["id_pai"].isna()].copy()
     for idx, row in principais.iterrows():
         with st.expander(f"Código: {row.get('codigo_sequencia','')} | {row.get('Projeto','')} | {row.get('Tipo de Serviço','')}", expanded=False):
@@ -346,7 +353,6 @@ def exibir_cronograma_fisico():
             st.write("**Gasto Real:** R$", row.get("Gasto Real", 0))
             st.write("**% Execução:**", row.get("% Execução", 0), "%")
             st.write("**Comentários:**", row.get("Comentários", ""))
-            
             if st.session_state.editing_enabled:
                 c1, c2, c3 = st.columns(3)
                 with c1:
@@ -358,11 +364,8 @@ def exibir_cronograma_fisico():
                 with c3:
                     if st.button("Excluir Projeto", key=f"excluir_projeto_{idx}"):
                         excluir_projeto(idx)
-            
             if st.session_state.edit_in_progress and st.session_state.edit_idx == idx:
                 exibir_form_edicao_inline(idx)
-            
-            # Exibição das subetapas relacionadas à etapa
             subetapas = df[df["id_pai"] == row["id"]]
             if not subetapas.empty:
                 if st.checkbox("Mostrar subetapas", key=f"mostrar_sub_{row.get('id')}"):
@@ -385,37 +388,29 @@ def exibir_cronograma_fisico():
                                     excluir_subetapa(idx_sub)
                             if st.session_state.edit_in_progress and st.session_state.edit_idx == idx_sub:
                                 exibir_form_edicao_inline(idx_sub)
+    st.markdown('-----')
 
 # ------------------------------------------------------------------------------
 # Gráficos Gantt
 # ------------------------------------------------------------------------------
 def exibir_gantt_fisico():
-    st.markdown("### Gantt - Cronograma Físico")
+    st.markdown("### 🗓️ Planejamento")
     df_version = st.session_state.last_version if "last_version" in st.session_state else st.session_state.df_principal
     if df_version.empty:
-        st.info("Sem dados para exibir no Gantt.")
+        st.info("Sem dados para exibir o Gantt.")
         return
-
-    # Filtro de Projetos: somente nomes de projeto das ETAPAS (id_pai isna())
     df_etapas = df_version[df_version["id_pai"].isna()]
-    projetos_opcoes = sorted(df_etapas["Projeto"].dropna().unique())
-    projetos_selecionados = st.multiselect("Filtrar por Projeto (Etapas)", options=projetos_opcoes, default=[])
-    if projetos_selecionados:
-        df_version = df_version[df_version["Projeto"].isin(projetos_selecionados)]
-    
-    # Filtro para exibir Etapa e Subetapa, só Etapa ou Só Subetapa
+    projeto_opcoes = [''] + sorted(df_etapas["Projeto"].dropna().unique().tolist())
+    projeto_selecionado = st.selectbox("Selecione o Projeto para Desembolso (Etapas)", options=projeto_opcoes, index=0)
+    if projeto_selecionado:
+        df_version = df_version[df_version["Projeto"] == projeto_selecionado]
     filtro = st.selectbox("Filtrar Gantt", options=["Etapa e Subetapa", "Só Etapa", "Só Subetapa"])
-    
-    # Cria coluna 'Tipo' para identificar Etapa (id_pai é NaN) e Subetapa (id_pai definido)
     df_version = df_version.copy()
     df_version["Tipo"] = df_version["id_pai"].apply(lambda x: "Subetapa" if pd.notnull(x) else "Etapa")
-    
     if filtro == "Só Etapa":
         df_version = df_version[df_version["Tipo"] == "Etapa"]
     elif filtro == "Só Subetapa":
         df_version = df_version[df_version["Tipo"] == "Subetapa"]
-
-    # Monta os dados para o Gantt
     gantt_data = []
     for _, row in df_version.iterrows():
         inicio = row.get("Data Início Contrapartida (Previsto)")
@@ -435,49 +430,33 @@ def exibir_gantt_fisico():
     if not gantt_data:
         st.info("Não há datas definidas para exibir o Gantt.")
         return
-
     df_gantt = pd.DataFrame(gantt_data)
-
-    # --- Ordenação pelo Código ---
     def sort_key(codigo):
         try:
             return tuple(int(x) for x in str(codigo).split('.'))
         except:
             return (999,)
-
     df_gantt["SortKey"] = df_gantt["Codigo"].apply(sort_key)
     df_gantt = df_gantt.sort_values(by="SortKey")
-
-    # Converter datas para valores numéricos (dias) a partir da data mínima
     reference_date = df_gantt["Start"].min()
     df_gantt["Start_num"] = df_gantt["Start"].apply(lambda d: (d - reference_date).days)
-
-    # Definir mapeamento de cores para Etapas (baseado no código)
-    unique_etapas = df_gantt[df_gantt["Tipo"]=="Etapa"]["Codigo"].unique()
     color_palette = px.colors.qualitative.Plotly
+    unique_etapas = df_gantt[df_gantt["Tipo"] == "Etapa"]["Codigo"].unique()
     etapa_colors = {codigo: color_palette[i % len(color_palette)] for i, codigo in enumerate(unique_etapas)}
-
-    # Função para clarear a cor (gera variação mais clara)
     def lighten_color(hex_color, amount=0.5):
         hex_color = hex_color.lstrip('#')
         lv = len(hex_color)
         rgb = tuple(int(hex_color[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
         new_rgb = tuple(int(c + (255 - c) * amount) for c in rgb)
         return '#%02x%02x%02x' % new_rgb
-
-    # Cria os rótulos conforme solicitado
     df_gantt.loc[df_gantt["Tipo"]=="Etapa", "Label"] = df_gantt[df_gantt["Tipo"]=="Etapa"].apply(
-        lambda r: f"Código: {r['Codigo']} | {r['Projeto']} | {r['TipoServico']}", axis=1)
+        lambda r: f"Código: {r['Codigo']} | {r['Projeto']} | {r['TipoServico']}", axis=1
+    )
     df_gantt.loc[df_gantt["Tipo"]=="Subetapa", "Label"] = df_gantt[df_gantt["Tipo"]=="Subetapa"].apply(
-        lambda r: f"Código: {r['Codigo']} | {r['Projeto']} | {r['TipoServico']}", axis=1)
-
-    # Gerar array de labels na ordem correta
+        lambda r: f"Código: {r['Codigo']} | {r['Projeto']} | {r['TipoServico']}", axis=1
+    )
     labels_order = df_gantt["Label"].unique().tolist()
-
-    # Cria o gráfico usando barras horizontais (go.Bar)
     fig = go.Figure()
-
-    # Separa as Etapas e Subetapas (já ordenadas) e plota
     df_etapa_plot = df_gantt[df_gantt["Tipo"]=="Etapa"]
     for _, row in df_etapa_plot.iterrows():
         fig.add_trace(go.Bar(
@@ -505,15 +484,12 @@ def exibir_gantt_fisico():
             text=f'{row["Execucao"]}%',
             textposition="inside"
         ))
-    
-    # -- Escala mensal no eixo X --
     start_date = df_gantt["Start"].min()
     end_date = df_gantt["Finish"].max()
     monthly_ticks = []
     current = datetime.date(start_date.year, start_date.month, 1)
     while current <= end_date:
         monthly_ticks.append((current - reference_date).days)
-        # incrementa 1 mês
         y = current.year
         m = current.month + 1
         if m > 12:
@@ -522,13 +498,12 @@ def exibir_gantt_fisico():
         current = datetime.date(y, m, 1)
     tick_vals = monthly_ticks
     tick_text = [(reference_date + datetime.timedelta(days=val)).strftime("%m/%Y") for val in tick_vals]
-    
     fig.update_layout(
         barmode='stack',
         yaxis={
             'categoryorder': 'array',
             'categoryarray': labels_order,
-            'autorange': 'reversed'  # <--- REVERSO: Etapas ficam acima das Subetapas
+            'autorange': 'reversed'
         },
         xaxis=dict(
             tickmode='array',
@@ -536,17 +511,169 @@ def exibir_gantt_fisico():
             ticktext=tick_text,
             title="Data"
         ),
-        title="Gantt - Cronograma Físico",
+        title="📋 Cronograma de Projetos",
         showlegend=False
     )
     st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------------------------------------------
-# Aba Cronograma Financeiro (Placeholder)
+# Cronograma Financeiro e Desembolso Mensal
 # ------------------------------------------------------------------------------
 def exibir_cronograma_financeiro():
-    st.subheader("Cronograma Financeiro (Geral)")
-    st.info("Implementação da aba Financeiro pendente.")
+    st.subheader("💸 Resumo Financeiro")
+    df = st.session_state.df_principal
+    if df.empty:
+        st.info("Nenhum dado disponível para o Cronograma Financeiro.")
+        return
+
+    opcao = st.radio("Visualizar:", ["Somente Etapas", "Somente Subetapas", "Todos"])
+    if opcao == "Somente Etapas":
+        df_fin = df[df["id_pai"].isna()].copy()
+    elif opcao == "Somente Subetapas":
+        df_fin = df[df["id_pai"].notna()].copy()
+    else:
+        df_fin = df.copy()
+
+    if df_fin.empty:
+        st.info("Nenhum registro encontrado para esse filtro.")
+        return
+
+    df_fin["Saldo"] = df_fin["Orçamento"] - df_fin["Gasto Real"]
+    df_fin["% Gasto"] = df_fin.apply(
+        lambda x: round((x["Gasto Real"] / x["Orçamento"]) * 100, 2) if x["Orçamento"] > 0 else 0,
+        axis=1
+    )
+
+    #st.write("### 💰 Resumo Financeiro")
+    df_fin_exibir = df_fin[[ "codigo_sequencia", "Projeto", "Orçamento", "Gasto Real", "Saldo", "% Gasto" ]]
+    st.dataframe(df_fin_exibir)
+
+    df_melt = df_fin_exibir.melt(
+        id_vars=["codigo_sequencia", "Projeto"],
+        value_vars=["Orçamento", "Gasto Real"],
+        var_name="Tipo",
+        value_name="Valor"
+    )
+
+    fig = px.bar(
+        df_melt,
+        x="codigo_sequencia",
+        y="Valor",
+        color="Tipo",
+        barmode="group",
+        hover_data=["Projeto"]
+    )
+    fig.update_layout(
+        title="Orçamento vs Gasto Real",
+        xaxis_title="Código",
+        yaxis_title="Valor (R$)"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown('-----')
+    exibir_cronograma_desembolso()
+
+def exibir_cronograma_desembolso():
+    st.subheader("Cronograma de Desembolso Mensal")
+    df_etapas = st.session_state.df_principal[st.session_state.df_principal["id_pai"].isna()]
+    if df_etapas.empty:
+        st.info("Nenhum projeto disponível para desembolso.")
+        return
+
+    # Multiselect: default em branco; se vazio, exibe todos
+    projeto_opcoes = sorted(df_etapas["Projeto"].dropna().unique())
+    projetos_selecionados = st.multiselect("Selecione os Projetos para Desembolso", options=projeto_opcoes, default=[])
+    if not projetos_selecionados:
+        projetos_selecionados = projeto_opcoes
+
+    final_df_list = []
+
+    for projeto in projetos_selecionados:
+        with st.expander(f"Cronograma de Desembolso para: {projeto}", expanded=False):
+            # Se não existir, inicializa a distribuição para o projeto
+            if projeto not in st.session_state.desembolso:
+                projeto_record = df_etapas[df_etapas["Projeto"] == projeto].iloc[0]
+                data_inicio = projeto_record["Data Início Contrapartida (Previsto)"]
+                data_termino = projeto_record["Data Término Contrapartida (Previsto)"]
+                if not data_inicio or not data_termino:
+                    st.error(f"O projeto {projeto} não possui datas de contrapartida definidas.")
+                    continue
+                meses = []
+                current = datetime.date(data_inicio.year, data_inicio.month, 1)
+                while current <= datetime.date(data_termino.year, data_termino.month, 1):
+                    meses.append(current)
+                    y = current.year
+                    m = current.month + 1
+                    if m > 12:
+                        m = 1
+                        y += 1
+                    current = datetime.date(y, m, 1)
+                num_meses = len(meses)
+                distrib_default = [round(100/num_meses, 1) for _ in range(num_meses)]
+                st.session_state.desembolso[projeto] = pd.DataFrame({
+                    "Mês": [mes.strftime("%m/%Y") for mes in meses],
+                    "Percentual (%)": distrib_default
+                })
+
+            # Editor para a distribuição
+            df_editado = st.data_editor(
+                st.session_state.desembolso[projeto].copy(),
+                num_rows="dynamic",
+                key=f"distrib_{projeto}",
+                disabled=not st.session_state.editing_enabled
+            )
+            st.session_state.desembolso[projeto] = df_editado.copy()
+
+            # Calcula o cronograma final para o projeto
+            projeto_record = df_etapas[df_etapas["Projeto"] == projeto].iloc[0]
+            orcamento = projeto_record["Orçamento"]
+            df_distrib = st.session_state.desembolso[projeto]
+            perc_list = df_distrib["Percentual (%)"].tolist()
+            soma = sum(perc_list)
+            if soma != 100:
+                perc_normalizado = [round((p/soma)*100, 1) for p in perc_list]
+                st.write("**Percentuais normalizados** (soma = 100):", perc_normalizado)
+            else:
+                perc_normalizado = perc_list
+            parcelas = [round((p/100)*orcamento, 2) for p in perc_normalizado]
+            df_final = pd.DataFrame({
+                "Mês": df_distrib["Mês"],
+                "Percentual (%)": perc_normalizado,
+                "Parcela (R$)": parcelas
+            })
+            st.write("### Cronograma de Desembolso Final:")
+            st.dataframe(df_final)
+            # Gráfico individual: barras cinzas com bordas cinza claro
+            fig = px.bar(
+                df_final,
+                x="Mês",
+                y="Parcela (R$)",
+                text="Percentual (%)",
+                title=f"Desembolso Mensal para {projeto}"
+            )
+            fig.update_traces(marker_color='gray', marker_line_color='lightgray', marker_line_width=1)
+            st.plotly_chart(fig, use_container_width=True)
+
+            df_final["Projeto"] = projeto
+            final_df_list.append(df_final)
+
+    # Cronograma Consolidado para TODOS os projetos selecionados
+    if final_df_list:
+        st.markdown('-----')
+        st.write("## Cronograma de Desembolso Consolidado")
+        df_consol = pd.concat(final_df_list)
+        df_consol_group = df_consol.groupby("Mês").agg({"Parcela (R$)":"sum"}).reset_index()
+        st.dataframe(df_consol_group)
+        # Gráfico consolidado: barras laranjas com bordas laranjas claras
+        fig_consol = px.bar(
+            df_consol_group,
+            x="Mês",
+            y="Parcela (R$)",
+            text="Parcela (R$)",
+            title="Desembolso Mensal Consolidado"
+        )
+        fig_consol.update_traces(marker_color='orange', marker_line_color='lightcoral', marker_line_width=1)
+        st.plotly_chart(fig_consol, use_container_width=True)
 
 # ------------------------------------------------------------------------------
 # Salvamento de Versão
@@ -582,7 +709,8 @@ def app_tabs():
 # Tela Principal
 # ------------------------------------------------------------------------------
 def main():
-    st.title("Gestão de Contrapartidas")
+    st.markdown('<h1 style="color: orange;">Gestão de Contrapartidas 🛣️</h1>', unsafe_allow_html=True)
+    st.markdown('')
     sidebar_edicao()
     app_tabs()
 
