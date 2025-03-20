@@ -26,7 +26,7 @@ from io import BytesIO
 from PIL import Image
 
 # ------------------------------------------------------------------------------
-# Configura a página para ocupar toda a largura
+# Configuração da página
 # ------------------------------------------------------------------------------
 st.set_page_config(
     page_icon=resource_path("Home.jpg"),
@@ -34,18 +34,18 @@ st.set_page_config(
     page_title="Pós Obra - Contrapartidas"
 )
 
-# Carregar os logos usando resource_path e PIL
+# Carregar logos
 logo_horizontal_path = resource_path("LOGO_VR.png")
-logo_reduzida_path   = resource_path("LOGO_VR_REDUZIDA.png")
+logo_reduzida_path = resource_path("LOGO_VR_REDUZIDA.png")
 try:
     logo_horizontal = Image.open(logo_horizontal_path)
-    logo_reduzida   = Image.open(logo_reduzida_path)
+    logo_reduzida = Image.open(logo_reduzida_path)
     st.logo(image=logo_horizontal, size="large", icon_image=logo_reduzida)
 except Exception as e:
     st.error(f"Não foi possível carregar as imagens: {e}")
 
 # ------------------------------------------------------------------------------
-# Credenciais de exemplo
+# Credenciais
 # ------------------------------------------------------------------------------
 USERS = {
     "lucas.oliveira": "lucas123",
@@ -53,15 +53,13 @@ USERS = {
 }
 
 # ------------------------------------------------------------------------------
-# Lista de colunas necessárias para o DataFrame
+# Colunas (Dados Base – somente as colunas desejadas)
 # ------------------------------------------------------------------------------
 COLUNAS = [
-    "id", "id_pai", "codigo_sequencia", "Status", "Projeto", "Tipo de Serviço",
-    "Data Início Obra (Prevista)", "Data Entrega Obra (Prevista)",
-    "Limite p/ Contratação", "Data Início Contrapartida (Previsto)",
-    "Data Início Contrapartida (Real)", "Data Término Contrapartida (Previsto)",
-    "Data Término Contrapartida (Real)", "Valor Viabilidade", "Orçamento",
-    "% Execução", "Gasto Real", "Modo de Medição", "Comentários"
+    "id_pai", "codigo_sequencia", "Status", "Projeto", "Tipo de Serviço",
+    "Data Início Contrapartida (Previsto)", "Data Término Contrapartida (Previsto)",
+    "Valor Viabilidade", "Orçamento", "% Execução", "Gasto Real",
+    "Modo de Medição", "Comentários"
 ]
 
 # ------------------------------------------------------------------------------
@@ -75,8 +73,8 @@ def formatar_data(data: datetime.date) -> str:
 def gerar_excel_download(df: pd.DataFrame, nome_arquivo: str = "dados_exportados.xlsx") -> str:
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-        # Planilha 1: Dados Base
-        df.to_excel(writer, index=False, sheet_name='Dados Base')
+        # Planilha 1: Dados Base (somente as colunas definidas)
+        df[COLUNAS].to_excel(writer, index=False, sheet_name='Dados Base')
         # Planilha 2: Resumo Financeiro
         df_fin = df.copy()
         df_fin["Saldo"] = df_fin["Orçamento"] - df_fin["Gasto Real"]
@@ -125,20 +123,50 @@ def gerar_excel_download(df: pd.DataFrame, nome_arquivo: str = "dados_exportados
 def load_data() -> pd.DataFrame:
     if os.path.exists("contrapartidas.csv"):
         df = pd.read_csv("contrapartidas.csv", sep=";")
+        # Garantir que todas as colunas definidas existam
+        for col in COLUNAS:
+            if col not in df.columns:
+                df[col] = ""
+        # Converter apenas as colunas de data que permanecem
         date_cols = [
-            "Data Início Obra (Prevista)", "Data Entrega Obra (Prevista)",
-            "Limite p/ Contratação", "Data Início Contrapartida (Previsto)",
-            "Data Término Contrapartida (Previsto)"
+            "Data Início Contrapartida (Previsto)", "Data Término Contrapartida (Previsto)"
         ]
         for col in date_cols:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col]).dt.date
+            if col in df.columns and df[col].dtype != 'datetime64[ns]':
+                df[col] = pd.to_datetime(df[col], errors='coerce').dt.date
         return df
     else:
         return pd.DataFrame(columns=COLUNAS)
 
 def persist_data():
     st.session_state.df_principal.to_csv("contrapartidas.csv", index=False, sep=";")
+
+# ------------------------------------------------------------------------------
+# Função para reorganizar os códigos sequenciais
+# ------------------------------------------------------------------------------
+def reorganizar_codigos():
+    df = st.session_state.df_principal.copy()
+    # Reorganiza os projetos (id_pai nulo)
+    projects = df[df["id_pai"].isnull()].copy().sort_index()
+    new_codes = {}
+    seq = 1
+    for idx in projects.index:
+        new_code = str(seq)
+        new_codes[df.loc[idx, "Projeto"]] = new_code
+        df.loc[idx, "codigo_sequencia"] = new_code
+        seq += 1
+    # Reorganiza as subetapas para cada projeto
+    subs = df[df["id_pai"].notnull()].copy().sort_index()
+    for projeto, code in new_codes.items():
+        subs_proj = df[(df["id_pai"].notnull()) & (df["Projeto"] == projeto)]
+        subs_proj = subs_proj.sort_values(by="codigo_sequencia")
+        seq_sub = 1
+        for idx in subs_proj.index:
+            df.loc[idx, "codigo_sequencia"] = f"{code}.{seq_sub}"
+            seq_sub += 1
+    st.session_state.df_principal = df.copy()
+    persist_data()
+    st.session_state.last_version = df.copy()
 
 # ------------------------------------------------------------------------------
 # Inicialização do State
@@ -196,36 +224,30 @@ def sidebar_edicao():
 # ------------------------------------------------------------------------------
 def excluir_projeto(idx):
     df = st.session_state.df_principal
-    projeto_id = df.loc[idx, "id"]
-    df = df[(df["id"] != projeto_id) & (df["id_pai"] != projeto_id)]
+    projeto_val = df.loc[idx, "Projeto"]
+    df = df[(df["Projeto"] != projeto_val) | (df["id_pai"].notnull())]
     st.session_state.df_principal = df.reset_index(drop=True)
-    persist_data()
+    reorganizar_codigos()
     st.success("Projeto excluído!")
 
 def excluir_subetapa(idx):
     df = st.session_state.df_principal
     st.session_state.df_principal = df.drop(idx).reset_index(drop=True)
-    persist_data()
+    reorganizar_codigos()
     st.success("Subetapa excluída!")
 
 def adicionar_projeto_callback():
     df = st.session_state.df_principal
-    novo_id = 1 if df.empty else df["id"].max() + 1
+    novo_id = 1 if df.empty else (df["codigo_sequencia"].count() + 1)
     novo_codigo = str(novo_id)
     novo_projeto = {
-        "id": novo_id,
         "id_pai": None,
         "codigo_sequencia": novo_codigo,
         "Status": "Não Iniciado",
         "Projeto": "Novo Projeto",
         "Tipo de Serviço": "",
-        "Data Início Obra (Prevista)": datetime.date.today(),
-        "Data Entrega Obra (Prevista)": datetime.date.today(),
-        "Limite p/ Contratação": datetime.date.today(),
         "Data Início Contrapartida (Previsto)": datetime.date.today(),
-        "Data Início Contrapartida (Real)": None,
         "Data Término Contrapartida (Previsto)": datetime.date.today(),
-        "Data Término Contrapartida (Real)": None,
         "Valor Viabilidade": 0,
         "Orçamento": 0,
         "% Execução": 0,
@@ -234,32 +256,26 @@ def adicionar_projeto_callback():
         "Comentários": ""
     }
     st.session_state.df_principal = pd.concat([df, pd.DataFrame([novo_projeto])], ignore_index=True)
-    persist_data()
+    reorganizar_codigos()
     st.success("Projeto adicionado!")
 
-def adicionar_subetapa_callback(projeto_id):
+def adicionar_subetapa_callback(projeto_val):
     df = st.session_state.df_principal
     if df.empty:
         st.warning("Nenhum projeto para associar subetapas.")
         return
-    novo_id = df["id"].max() + 1
-    parent = df[df["id"] == projeto_id].iloc[0]
-    sub_count = len(df[df["id_pai"] == projeto_id])
+    novo_id = df["codigo_sequencia"].count() + 1
+    parent = df[df["Projeto"] == projeto_val].iloc[0]
+    sub_count = len(df[df["Projeto"] == projeto_val]) - 1
     novo_codigo = f"{parent['codigo_sequencia']}.{sub_count+1}"
     nova_subetapa = {
-        "id": novo_id,
-        "id_pai": projeto_id,
+        "id_pai": projeto_val,
         "codigo_sequencia": novo_codigo,
         "Status": "Não Iniciado",
         "Projeto": parent["Projeto"],
         "Tipo de Serviço": "",
-        "Data Início Obra (Prevista)": None,
-        "Data Entrega Obra (Prevista)": None,
-        "Limite p/ Contratação": parent["Limite p/ Contratação"],
         "Data Início Contrapartida (Previsto)": parent["Data Início Contrapartida (Previsto)"],
-        "Data Início Contrapartida (Real)": None,
         "Data Término Contrapartida (Previsto)": parent["Data Término Contrapartida (Previsto)"],
-        "Data Término Contrapartida (Real)": None,
         "Valor Viabilidade": 0,
         "Orçamento": 0,
         "% Execução": 0,
@@ -268,7 +284,7 @@ def adicionar_subetapa_callback(projeto_id):
         "Comentários": ""
     }
     st.session_state.df_principal = pd.concat([df, pd.DataFrame([nova_subetapa])], ignore_index=True)
-    persist_data()
+    reorganizar_codigos()
     st.success("Subetapa adicionada!")
 
 # ------------------------------------------------------------------------------
@@ -374,26 +390,21 @@ def exibir_cronograma_fisico():
 
     with st.container():
         st.markdown("### Filtros do Cronograma Físico")
-        # Filtro de Projeto (default vazio)
         projetos = sorted(df["Projeto"].dropna().unique())
         projetos_filter = st.multiselect("Projeto", options=projetos, default=[])
         if projetos_filter:
             df = df[df["Projeto"].isin(projetos_filter)]
-        # Filtro de Status (default vazio)
         status_options = ["Não Iniciado", "Planejamento", "Em Andamento", "Concluído"]
         status_filter = st.multiselect("Status", options=status_options, default=[])
         if status_filter:
             df = df[df["Status"].isin(status_filter)]
-        # Filtro de Período (Mês e Ano)
         if not df["Data Início Contrapartida (Previsto)"].dropna().empty:
             df["Mes"] = pd.to_datetime(df["Data Início Contrapartida (Previsto)"]).dt.month
             df["Ano"] = pd.to_datetime(df["Data Início Contrapartida (Previsto)"]).dt.year
             month_map = {1:"janeiro", 2:"fevereiro", 3:"março", 4:"abril", 5:"maio", 6:"junho",
                          7:"julho", 8:"agosto", 9:"setembro", 10:"outubro", 11:"novembro", 12:"dezembro"}
             df["Mes_Nome"] = df["Mes"].map(month_map)
-            meses_available = [m for m in ["janeiro","fevereiro","março","abril","maio","junho",
-                                            "julho","agosto","setembro","outubro","novembro","dezembro"]
-                               if m in df["Mes_Nome"].unique()]
+            meses_available = [m for m in month_map.values() if m in df["Mes_Nome"].unique()]
             meses_filter = st.multiselect("Período (Mês)", options=meses_available, default=[])
             if meses_filter:
                 df = df[df["Mes_Nome"].isin(meses_filter)]
@@ -401,9 +412,9 @@ def exibir_cronograma_fisico():
             anos_filter = st.multiselect("Período (Ano)", options=[str(y) for y in anos_available], default=[])
             if anos_filter:
                 df = df[df["Ano"].isin([int(y) for y in anos_filter])]
-    principais = df[df["id_pai"].isna()].copy()
+    principais = df[df["id_pai"].isnull()].copy()
     for idx, row in principais.iterrows():
-        with st.expander(f"Código: {row.get('codigo_sequencia','')} | {row.get('Projeto','')} | {row.get('Tipo de Serviço','')}", expanded=False):
+        with st.expander(f"Código: {row.get('codigo_sequencia', '')} | {row.get('Projeto', '')} | {row.get('Tipo de Serviço', '')}", expanded=False):
             st.write("**Status:**", row.get("Status", ""))
             st.write("**Data Início Contrapartida (Previsto):**", formatar_data(row.get("Data Início Contrapartida (Previsto)")))
             st.write("**Data Término Contrapartida (Previsto):**", formatar_data(row.get("Data Término Contrapartida (Previsto)")))
@@ -419,7 +430,7 @@ def exibir_cronograma_fisico():
                         iniciar_edicao(idx)
                 with c2:
                     if st.button("Adicionar Subetapa", key=f"add_sub_{idx}"):
-                        adicionar_subetapa_callback(row["id"])
+                        adicionar_subetapa_callback(row["Projeto"])
                 with c3:
                     if st.button("Excluir Projeto", key=f"excluir_projeto_{idx}"):
                         excluir_projeto(idx)
@@ -429,7 +440,7 @@ def exibir_cronograma_fisico():
             if not subetapas.empty:
                 if st.checkbox("Mostrar subetapas", key=f"mostrar_sub_{row.get('id')}"):
                     for idx_sub, row_sub in subetapas.iterrows():
-                        st.markdown(f"**Código: {row_sub.get('codigo_sequencia','')} | {row_sub.get('Projeto','')} | {row_sub.get('Tipo de Serviço','')}**")
+                        st.markdown(f"**Código: {row_sub.get('codigo_sequencia', '')} | {row_sub.get('Projeto', '')} | {row_sub.get('Tipo de Serviço', '')}**")
                         st.write("Status:", row_sub.get("Status", ""))
                         st.write("Data Início Subetapa (Previsto):", formatar_data(row_sub.get("Data Início Contrapartida (Previsto)")))
                         st.write("Data Término Subetapa (Previsto):", formatar_data(row_sub.get("Data Término Contrapartida (Previsto)")))
@@ -465,7 +476,7 @@ def exibir_gantt_fisico():
         anos_filter = st.multiselect("Ano (Gantt)", options=[str(a) for a in anos_available], default=[])
         if anos_filter:
             df_version = df_version[df_version["Ano"].isin([int(a) for a in anos_filter])]
-    df_etapas = df_version[df_version["id_pai"].isna()]
+    df_etapas = df_version[df_version["id_pai"].isnull()]
     projeto_opcoes = [''] + sorted(df_etapas["Projeto"].dropna().unique().tolist())
     projeto_selecionado = st.selectbox("Selecione o Projeto para Desembolso (Etapas)", options=projeto_opcoes, index=0)
     if projeto_selecionado:
@@ -512,14 +523,14 @@ def exibir_gantt_fisico():
     def lighten_color(hex_color, amount=0.5):
         hex_color = hex_color.lstrip('#')
         lv = len(hex_color)
-        rgb = tuple(int(hex_color[i:i+lv//3],16) for i in range(0,lv,lv//3))
+        rgb = tuple(int(hex_color[i:i+lv//3], 16) for i in range(0, lv, lv//3))
         new_rgb = tuple(int(c + (255-c)*amount) for c in rgb)
         return '#%02x%02x%02x' % new_rgb
     df_gantt.loc[df_gantt["Tipo"]=="Etapa", "Label"] = df_gantt[df_gantt["Tipo"]=="Etapa"].apply(
-        lambda r: f"Código: {r['Codigo']} | {r['Projeto']} | {r['TipoServico']}", axis=1
+        lambda r: f"Código: {r.get('codigo_sequencia','')} | {r['Projeto']} | {r['TipoServico']}", axis=1
     )
     df_gantt.loc[df_gantt["Tipo"]=="Subetapa", "Label"] = df_gantt[df_gantt["Tipo"]=="Subetapa"].apply(
-        lambda r: f"Código: {r['Codigo']} | {r['Projeto']} | {r['TipoServico']}", axis=1
+        lambda r: f"Código: {r.get('codigo_sequencia','')} | {r['Projeto']} | {r['TipoServico']}", axis=1
     )
     labels_order = df_gantt["Label"].unique().tolist()
     fig = go.Figure()
@@ -530,14 +541,14 @@ def exibir_gantt_fisico():
             y=[row["Label"]],
             base=[row["Start_num"]],
             orientation="h",
-            marker_color=etapa_colors.get(row["Codigo"], "#636efa"),
+            marker_color=etapa_colors.get(row.get("codigo_sequencia",""), "#636efa"),
             width=0.8,
             text=f'{row["Execucao"]}%',
             textposition="inside"
         ))
     df_sub_plot = df_gantt[df_gantt["Tipo"]=="Subetapa"]
     for _, row in df_sub_plot.iterrows():
-        parent_codigo = str(row["Codigo"]).split('.')[0]
+        parent_codigo = str(row.get("Codigo", "")).split('.')[0]
         parent_color = etapa_colors.get(parent_codigo, "#636efa")
         sub_color = lighten_color(parent_color, amount=0.5)
         fig.add_trace(go.Bar(
@@ -582,11 +593,22 @@ def exibir_cronograma_financeiro():
     if df.empty:
         st.info("Nenhum dado disponível para o Cronograma Financeiro.")
         return
+
+    # Filtros: Projeto e Status (default vazio)
+    projetos_resumo = sorted(df["Projeto"].dropna().unique())
+    projetos_filter = st.multiselect("Filtrar Resumo - Projeto", options=projetos_resumo, default=[])
+    if projetos_filter:
+        df = df[df["Projeto"].isin(projetos_filter)]
+    status_resumo = sorted(df["Status"].dropna().unique())
+    status_filter = st.multiselect("Filtrar Resumo - Status", options=status_resumo, default=[])
+    if status_filter:
+        df = df[df["Status"].isin(status_filter)]
+
     opcao = st.radio("Visualizar:", ["Somente Etapas", "Somente Subetapas", "Todos"])
     if opcao == "Somente Etapas":
-        df_fin = df[df["id_pai"].isna()].copy()
+        df_fin = df[df["id_pai"].isnull()].copy()
     elif opcao == "Somente Subetapas":
-        df_fin = df[df["id_pai"].notna()].copy()
+        df_fin = df[df["id_pai"].notnull()].copy()
     else:
         df_fin = df.copy()
     if df_fin.empty:
@@ -598,20 +620,53 @@ def exibir_cronograma_financeiro():
     st.write("### Tabela Financeira")
     df_fin_exibir = df_fin[["codigo_sequencia", "Projeto", "Orçamento", "Gasto Real", "Saldo", "% Gasto"]]
     st.dataframe(df_fin_exibir)
-    df_melt = df_fin_exibir.melt(id_vars=["codigo_sequencia", "Projeto"],
-                                 value_vars=["Orçamento", "Gasto Real"],
-                                 var_name="Tipo",
-                                 value_name="Valor")
-    fig = px.bar(df_melt, x="codigo_sequencia", y="Valor", color="Tipo",
-                 barmode="group", hover_data=["Projeto"])
-    fig.update_layout(title="Orçamento vs Gasto Real", xaxis_title="Código", yaxis_title="Valor (R$)")
-    st.plotly_chart(fig, use_container_width=True)
+    # Gráfico: Viabilidade vs Orçamento vs Gasto Real (agregado por Projeto)
+    df_fin_exibir2 = df_fin[["Projeto", "Valor Viabilidade", "Orçamento", "Gasto Real"]]
+    df_grouped = df_fin_exibir2.groupby("Projeto", as_index=False).agg({
+        "Valor Viabilidade": "max",
+        "Orçamento": "sum",
+        "Gasto Real": "sum"
+    })
+    fig2 = go.Figure()
+    fig2.add_trace(go.Bar(
+        x=df_grouped["Projeto"],
+        y=df_grouped["Valor Viabilidade"],
+        name="Valor Viabilidade",
+        marker_color='#FFDAB9',
+        marker_line_color='#FF8C00',
+        marker_line_width=1,
+        text=df_grouped["Valor Viabilidade"],
+        textposition="auto"
+    ))
+    fig2.add_trace(go.Bar(
+        x=df_grouped["Projeto"],
+        y=df_grouped["Orçamento"],
+        name="Orçamento",
+        marker_color='#D3D3D3',
+        marker_line_color='#A9A9A9',
+        marker_line_width=1,
+        text=df_grouped["Orçamento"],
+        textposition="auto"
+    ))
+    fig2.add_trace(go.Bar(
+        x=df_grouped["Projeto"],
+        y=df_grouped["Gasto Real"],
+        name="Gasto Real",
+        marker_color='#90EE90',
+        marker_line_color='#008000',
+        marker_line_width=1,
+        text=df_grouped["Gasto Real"],
+        textposition="auto"
+    ))
+    fig2.update_layout(barmode="group", title="Viabilidade vs Orçamento vs Gasto Real",
+                       xaxis_title="Projeto", yaxis_title="Valor (R$)")
+    st.plotly_chart(fig2, use_container_width=True)
     st.markdown('-----')
     exibir_cronograma_desembolso()
 
 def exibir_cronograma_desembolso():
     st.subheader("Cronograma de Desembolso Mensal")
-    df_etapas = st.session_state.df_principal[st.session_state.df_principal["id_pai"].isna()]
+    df_etapas = st.session_state.df_principal[st.session_state.df_principal["id_pai"].isnull()]
     if df_etapas.empty:
         st.info("Nenhum projeto disponível para desembolso.")
         return
@@ -738,7 +793,7 @@ def salvar_versao():
     filename = f"versao_cronograma_{timestamp}.xlsx"
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Dados Base')
+        df[COLUNAS].to_excel(writer, index=False, sheet_name='Dados Base')
         df_fin_exibir.to_excel(writer, index=False, sheet_name='Resumo Financeiro')
         df_consol_group.to_excel(writer, index=False, sheet_name='Desembolso Consolidado')
         df_break.to_excel(writer, index=False, sheet_name='Resumo Mensal')

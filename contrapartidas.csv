@@ -1,6 +1,5 @@
 id;id_pai;codigo_sequencia;Status;Projeto;Tipo de Serviço;Data Início Obra (Prevista);Data Entrega Obra (Prevista);Limite p/ Contratação;Data Início Contrapartida (Previsto);Data Início Contrapartida (Real);Data Término Contrapartida (Previsto);Data Término Contrapartida (Real);Valor Viabilidade;Orçamento;% Execução;Gasto Real;Comentários;Modo de Medição
 1;;1.0;Concluído;Residencial Solar das Andorinhas;Pavimentação;2025-03-18;2025-03-18;2025-03-18;2024-04-18;;2024-06-04;;462712.99;477000.0;100.0;477000.0;;Por % Execução
-2;;2.0;Concluído;Residencial Solar das Andorinhas;Ampliação de Rede Elétrica;2025-03-18;2025-03-18;2025-03-18;2024-06-10;;2024-07-20;;59839.23;59839.23;100.0;59839.23;;Por % Execução
 3;;3.0;Concluído;Residencial Plaza de Espanha;Doação Ponto de Ônibus;2025-03-18;2025-03-18;2025-03-18;2024-01-10;;2024-02-20;;906780.03;87000.0;100.0;87000.0;;Por Gasto Real
 4;;4.0;Planejamento;Residencial Plaza de Espanha;Reforma de Escola Municipal;2025-03-18;2025-03-18;2025-03-18;2025-05-20;;2025-12-20;;906780.03;915408.0;0.0;0.0;"(Pós Obra) - Aguardando fechamento de Orçamento;
 (Incorporação) - Aguardando protocolo e aprovação de Projeto Arquitetônico;
@@ -12,7 +11,7 @@ id;id_pai;codigo_sequencia;Status;Projeto;Tipo de Serviço;Data Início Obra (Pr
 9;;9.0;Não Iniciado;Residencial Boulevard Felice I;Depósito em Pecúnio;2025-03-18;2025-03-18;2025-03-18;2025-12-10;;2026-04-20;;236501.98;236501.98;0.0;0.0;Necessário Atualizar Orçamento com Prefeitura.;Por % Execução
 10;;10.0;Não Iniciado;Residencial Boulevard Felice II;Depósito em Pecúnio;2025-03-18;2025-03-18;2025-03-18;2025-11-10;;2026-03-20;;241370.45;241370.45;0.0;0.0;(Incorporação) Solicitar à Prefeitura a Atualização dos Valores.;Por % Execução
 11;;11.0;Não Iniciado;Residencial Boulevard Felice III;Depósito em Pecúnio;2025-03-18;2025-03-18;2025-03-18;2025-12-10;;2026-04-20;;275194.22;278000.0;0.0;0.0;(Incorporação) Solicitar à Prefeitura a Atualização dos Valores.;Por % Execução
-12;;12.0;Planejamento;Residencial Plaza Mayorca;Corte de Árvores;2025-03-18;2025-03-18;2025-03-18;2024-05-10;;2024-05-20;;2404384.01;6500.0;100.0;6500.0;;Por % Execução
+12;;12.0;Concluído;Residencial Plaza Mayorca;Corte de Árvores;2025-03-18;2025-03-18;2025-03-18;2024-05-10;;2024-05-20;;2404384.01;6500.0;100.0;6500.0;;Por % Execução
 13;;13.0;Planejamento;Residencial Plaza Mayorca;Doação Mudas de Árvore;2025-03-18;2025-03-18;2025-03-18;2024-04-10;;2024-04-20;;2404384.01;2100.0;100.0;2100.0;;Por % Execução
 14;;14.0;Em Andamento;Residencial Plaza Mayorca;Pavimentação;2025-03-18;2025-03-18;2025-03-18;2024-12-10;;2025-02-20;;2404384.01;950138.37;100.0;950138.37;;Por % Execução
 15;;15.0;Não Iniciado;Residencial San Francesco;Projeto e Instalação Semáforo;2025-03-18;2025-03-18;2025-03-18;2025-09-10;;2025-12-20;;658871.3;0.0;0.0;0.0;;Por % Execução
