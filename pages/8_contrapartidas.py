@@ -596,11 +596,11 @@ def exibir_cronograma_financeiro():
 
     # Filtros: Projeto e Status (default vazio)
     projetos_resumo = sorted(df["Projeto"].dropna().unique())
-    projetos_filter = st.multiselect("Filtrar Resumo - Projeto", options=projetos_resumo, default=[])
+    projetos_filter = st.multiselect("Filtrar por Projeto", options=projetos_resumo, default=[])
     if projetos_filter:
         df = df[df["Projeto"].isin(projetos_filter)]
     status_resumo = sorted(df["Status"].dropna().unique())
-    status_filter = st.multiselect("Filtrar Resumo - Status", options=status_resumo, default=[])
+    status_filter = st.multiselect("Filtrar por Status", options=status_resumo, default=[])
     if status_filter:
         df = df[df["Status"].isin(status_filter)]
 
@@ -617,7 +617,7 @@ def exibir_cronograma_financeiro():
     df_fin["Saldo"] = df_fin["Orçamento"] - df_fin["Gasto Real"]
     df_fin["% Gasto"] = df_fin.apply(lambda x: round((x["Gasto Real"] / x["Orçamento"]) * 100, 2)
                                      if x["Orçamento"] > 0 else 0, axis=1)
-    st.write("### Tabela Financeira")
+    st.write("### 📟Tabela Resumo Financeiro")
     df_fin_exibir = df_fin[["codigo_sequencia", "Projeto", "Orçamento", "Gasto Real", "Saldo", "% Gasto"]]
     st.dataframe(df_fin_exibir)
     # Gráfico: Viabilidade vs Orçamento vs Gasto Real (agregado por Projeto)
@@ -658,14 +658,14 @@ def exibir_cronograma_financeiro():
         text=df_grouped["Gasto Real"],
         textposition="auto"
     ))
-    fig2.update_layout(barmode="group", title="Viabilidade vs Orçamento vs Gasto Real",
+    fig2.update_layout(barmode="group", title="🫰 Viabilidade vs Orçamento vs Gasto Real",
                        xaxis_title="Projeto", yaxis_title="Valor (R$)")
     st.plotly_chart(fig2, use_container_width=True)
     st.markdown('-----')
     exibir_cronograma_desembolso()
 
 def exibir_cronograma_desembolso():
-    st.subheader("Cronograma de Desembolso Mensal")
+    st.subheader("💲Cronograma de Desembolso Mensal")
     df_etapas = st.session_state.df_principal[st.session_state.df_principal["id_pai"].isnull()]
     if df_etapas.empty:
         st.info("Nenhum projeto disponível para desembolso.")
@@ -732,14 +732,14 @@ def exibir_cronograma_desembolso():
             final_df_list.append(df_final)
     if final_df_list:
         st.markdown('-----')
-        st.write("## Cronograma de Desembolso Consolidado")
+        st.write("## 💳 Cronograma de Desembolso Consolidado")
         df_consol = pd.concat(final_df_list)
         df_consol_group = df_consol.groupby("Mês").agg({"Parcela (R$)":"sum"}).reset_index()
         st.dataframe(df_consol_group)
-        fig_consol = px.bar(df_consol_group, x="Mês", y="Parcela (R$)", text="Parcela (R$)", title="Desembolso Mensal Consolidado")
+        fig_consol = px.bar(df_consol_group, x="Mês", y="Parcela (R$)", text="Parcela (R$)", title="💵 Desembolso Mensal Consolidado")
         fig_consol.update_traces(marker_color='orange', marker_line_color='lightcoral', marker_line_width=1)
         st.plotly_chart(fig_consol, use_container_width=True)
-        st.write("## Resumo Mensal por Projeto")
+        st.write("## 🏙️ Resumo Mensal por Projeto")
         df_break = df_consol.groupby(["Mês", "Projeto"])["Parcela (R$)"].sum().reset_index()
         if not df_break.empty:
             total_by_month = df_break.groupby("Mês")["Parcela (R$)"].transform('sum')
