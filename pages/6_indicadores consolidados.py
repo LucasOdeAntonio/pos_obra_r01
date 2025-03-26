@@ -42,7 +42,7 @@ except Exception as e:
 
 # CEBEÇALHO INÍCIO ===========================================================================================================================
 #st.image("LOGO_VR.png", caption="") - pra adicionar imagens
-st.markdown('<h1 style="color: orange;">Indicadores Consolidados TESTANDO 2 🎯</h1>', unsafe_allow_html=True)
+st.markdown('<h1 style="color: orange;">Indicadores Consolidados - Painel de Resultados 🎯</h1>', unsafe_allow_html=True)
 #st.image("fluxograma.png", caption="")
 
 

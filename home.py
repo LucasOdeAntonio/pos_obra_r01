@@ -1,5 +1,12 @@
 import sys
 import os
+import streamlit as st
+import pandas as pd
+from PIL import Image
+import smtplib
+import ssl
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Adiciona o diretório extraído em modo frozen ao sys.path
 if getattr(sys, 'frozen', False):
@@ -15,10 +22,6 @@ def resource_path(relative_path):
     if getattr(sys, 'frozen', False):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.dirname(__file__), relative_path)
-
-import streamlit as st
-import pandas as pd
-from PIL import Image
 
 # Configurando Página (usa resource_path para encontrar o ícone)
 st.set_page_config(
@@ -38,55 +41,92 @@ try:
 except Exception as e:
     st.error(f"Não foi possível carregar as imagens: {e}")
 
-# CEBEÇALHO INÍCIO
-st.markdown('<h1 style="color: orange;">Painel de Resultados 📈</h1>', unsafe_allow_html=True)
-st.markdown('''Painel para Acompanhamento de Metas Estratégicas - OKR's''')
-st.markdown('''Painel de Resultados BI Até 2024 https://app.powerbi.com/view?r=eyJrIjoiYjM0YTU4OWItNGEwOS00MGZkLWE1NGMtYTQyZWM5OGYzYjNiIiwidCI6Ijk5MWEwMGM5LTY1ZGUtNDFjMS04YzUxLTI3N2Q4YzEwZmNkYSJ9''')
-# CEBEÇALHO FIM
-
-# COMO FAZER PRA VIR DE EXCEL
-excel_home = resource_path("planilha_home.xlsx")
-ordem_meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
-
+# Carregar a LOGO_VR
+logo_vr_path = resource_path("LOGO_VR.png")
 try:
-    df_original = pd.read_excel(excel_home)
-    if all(col in df_original.columns for col in ['OBJETIVOS', 'ANO', 'MÊS']):
-        df_original['MÊS'] = df_original['MÊS'].apply(lambda x: str(x).capitalize() if not pd.isna(x) else "")
-        df_original['ANO'] = df_original['ANO'].apply(lambda x: str(int(x)) if not pd.isna(x) else "")
-        df_original['OBJETIVOS'] = df_original['OBJETIVOS'].apply(lambda x: str(x) if not pd.isna(x) else "")
-        
-        df_filtered = df_original.copy()
-        anos_disponiveis = sorted(df_filtered['ANO'].unique())
-        ano_selecionado = st.sidebar.selectbox("Selecione o Ano", options=["Todos"] + anos_disponiveis)
-        if ano_selecionado != "Todos":
-            df_filtered = df_filtered[df_filtered['ANO'] == ano_selecionado]
-            
-        meses_disponiveis = sorted([mes for mes in df_filtered['MÊS'].unique() if mes in ordem_meses],
-                                    key=lambda x: ordem_meses.index(x))
-        mes_selecionado = st.sidebar.selectbox("Selecione o Mês", options=["Todos"] + meses_disponiveis)
-        if mes_selecionado != "Todos":
-            df_filtered = df_filtered[df_filtered['MÊS'] == mes_selecionado]
-            
-        objetivos_disponiveis = sorted(df_filtered['OBJETIVOS'].unique())
-        objetivo_selecionado = st.sidebar.selectbox("Selecione o Objetivo", options=["Todos"] + objetivos_disponiveis)
-        if objetivo_selecionado != "Todos":
-            df_filtered = df_filtered[df_filtered['OBJETIVOS'] == objetivo_selecionado]
-            
-        if objetivo_selecionado != "Todos":
-            st.markdown(f"# {objetivo_selecionado}")
-        else:
-            st.markdown("# Dados de Todos os Objetivos")
-        st.markdown(f"Dados do Ano Selecionado: {ano_selecionado}" if ano_selecionado != "Todos" else "Dados de Todos os Anos")
-        st.markdown(f"Dados do Mês Selecionado: {mes_selecionado}" if mes_selecionado != "Todos" else "Dados de Todos os Meses")
-        
-        csv_file = "planilha_home.csv"
-        df_filtered.to_csv(csv_file, index=False, encoding='utf-8')
-        st.markdown("### Objetivos e Indicadores Estratégicos")
-        st.dataframe(df_filtered, use_container_width=True)
-        st.success(f"Planilha salva como '{csv_file}'!")
-    else:
-        st.warning("As colunas 'OBJETIVOS', 'ANO' e 'MÊS' não foram encontradas na planilha. Nenhum filtro será aplicado.")
-except FileNotFoundError:
-    st.error("O arquivo Excel não foi encontrado. Por favor, verifique o caminho.")
+    logo_vr = Image.open(logo_vr_path)
+    st.image(logo_vr, caption="", use_container_width=False)
 except Exception as e:
-    st.error(f"Ocorreu um erro: {e}")
+    st.error(f"Não foi possível carregar a imagem da LOGO_VR: {e}")
+
+# Título da página
+st.markdown('<h1 style="color: orange;">SISTEMA INTRANET - PÓS OBRA 📈</h1>', unsafe_allow_html=True)
+
+# ========================
+# FUNÇÃO PARA ENVIAR E-MAIL
+# ========================
+def enviar_email(nome, avaliacao, comentario):
+    """
+    Envia um e-mail contendo as informações de feedback.
+    """
+    
+    # Configurações do remetente e destinatário
+    email_remetente = "assistencia.tecnica@nvrempreendimentos.com.br"
+    senha_remetente = "X&407377994152uk"
+    email_destinatario = "lucas.oliveira@nvrempreendimentos.com.br"
+    
+    # Configuração do servidor SMTP para Outlook
+    smtp_server = "smtp.office365.com"
+    smtp_port = 587
+    
+    # Montar o assunto e o corpo do e-mail
+    assunto = "Novo Feedback Recebido"
+    corpo = (
+        f"Olá,\n\n"
+        f"Você recebeu um novo feedback do sistema:\n\n"
+        f"Nome: {nome}\n"
+        f"Avaliação: {avaliacao}\n"
+        f"Comentário: {comentario}\n\n"
+        f"Atenciosamente,\n"
+        f"Sistema de Feedback"
+    )
+    
+    # Criando a estrutura do e-mail (MIME)
+    mensagem = MIMEMultipart("alternative")
+    mensagem["Subject"] = assunto
+    mensagem["From"] = email_remetente
+    mensagem["To"] = email_destinatario
+    
+    # Anexa o texto
+    parte_texto = MIMEText(corpo, "plain")
+    mensagem.attach(parte_texto)
+    
+    # Enviar e-mail usando SMTP com TLS
+    try:
+        context = ssl.create_default_context()
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls(context=context)
+            server.login(email_remetente, senha_remetente)
+            server.sendmail(email_remetente, email_destinatario, mensagem.as_string())
+        st.success("Feedback enviado com sucesso! Um e-mail foi enviado para o administrador.")
+    except Exception as e:
+        st.error(f"Falha ao enviar e-mail: {e}")
+
+# ========================
+# SEÇÃO DE FEEDBACK
+# ========================
+st.markdown("## Feedback - Por favor nos envie seu feedback sobre o nosso sistema!")
+
+emoticons = {
+    1: "😞 (Muito Ruim)",
+    2: "😕 (Ruim)",
+    3: "😐 (Regular)",
+    4: "🙂 (Bom)",
+    5: "😃 (Excelente)"
+}
+
+with st.form(key='feedback_form'):
+    nome = st.text_input("Seu Nome")
+    
+    avaliacao = st.radio(
+        "Avalie nosso sistema",
+        options=[1, 2, 3, 4, 5],
+        format_func=lambda x: emoticons[x]
+    )
+    
+    comentario = st.text_area("Comentários adicionais")
+    submit_button = st.form_submit_button(label='Enviar Feedback')
+
+if submit_button:
+    # Ao clicar, a função enviar_email é chamada para disparar o envio do e-mail
+    enviar_email(nome, avaliacao, comentario)
