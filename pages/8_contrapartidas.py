@@ -29,7 +29,7 @@ from PIL import Image
 # Configuração da página
 # ------------------------------------------------------------------------------
 st.set_page_config(
-    page_icon=resource_path("Home.jpg"),
+    page_icon="Home.jpg",
     layout='wide',
     page_title="Pós Obra - Contrapartidas"
 )
