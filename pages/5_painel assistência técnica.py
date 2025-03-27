@@ -24,7 +24,6 @@ import plotly.graph_objects as go
 from datetime import datetime, date
 from PIL import Image
 
-
 # =============================================================================
 # Função para normalizar os nomes das colunas (remove espaços extras)
 # =============================================================================
@@ -151,11 +150,10 @@ df_eng["Dias em Aberto"] = np.where(
     df_eng["Tempo de Encerramento"]
 )
 total_solicitacoes = df_eng["N°"].count()
-df_concluidas = df_eng[df_eng["Encerramento"].notna()]
-if not df_concluidas.empty:
-    mttc = df_concluidas["Tempo de Encerramento"].sum() / df_concluidas.shape[0]
-else:
-    mttc = np.nan
+
+# --- Alteração realizada: calcular o MTTC utilizando TODOS os registros,
+# ou seja, se "Encerramento" for vazio, utiliza a data de hoje.
+mttc = df_eng["Dias em Aberto"].mean()
 
 # =============================================================================
 # Integração com a aba "departamento"
@@ -380,49 +378,45 @@ st.plotly_chart(fig1, use_container_width=True)
 st.markdown("---")
 
 # 2 - Gráfico de Pirâmide (por ano)
-# Extraímos o ano da "Data Abertura" e agrupamos para obter a contagem
 df_pyramid = df_filtered.copy()
 df_pyramid["Ano"] = df_pyramid["Data de Abertura"].dt.year
 df_pyramid_grouped = df_pyramid.groupby("Ano").size().reset_index(name="Count")
 df_pyramid_grouped = df_pyramid_grouped.sort_values("Ano", ascending=True)
 
-# Criação do gráfico de barras horizontais (pirâmide)
 fig2 = px.bar(
     df_pyramid_grouped,
     x="Count",
     y="Ano",
     orientation="h",
     text="Count",
-    color_discrete_sequence=["#FFCC99"],  # Laranja claro
-    labels={"Count": "", "Ano": ""},  # Remove nomes dos eixos
+    color_discrete_sequence=["#FFCC99"],
+    labels={"Count": "", "Ano": ""},
 )
 fig2.update_traces(
-    marker_line_color="#FF9933",  # Laranja escuro para a borda
+    marker_line_color="#FF9933",
     marker_line_width=1.5,
     textposition="inside"
 )
 
-# Ajustando o eixo Y para exibir apenas números inteiros
 fig2.update_yaxes(
-    autorange="reversed",  # Mantém a ordem decrescente dos anos
-    tickmode="linear",  # Define a escala como linear
-    dtick=1,  # Define os intervalos do eixo Y como 1 (apenas inteiros)
-    tickformat="d"  # Garante que os valores sejam exibidos como inteiros
+    autorange="reversed",
+    tickmode="linear",
+    dtick=1,
+    tickformat="d"
 )
 
 fig2.update_layout(
-    height=300,  # Define a altura do gráfico para 300 pixels
+    height=300,
     yaxis=dict(
-        showgrid=False,  # Remove as linhas horizontais
-        showticklabels=True,  # Remove os números do eixo Y
+        showgrid=False,
+        showticklabels=True,
     ),
     xaxis=dict(
-        showticklabels=False # Remove os números do eixo X
+        showticklabels=False
     )
 )
 
 # 3 - Gráfico de Solicitações por Empreendimento
-# Agrupamos por "Empreendimento"
 df_empreendimento = df_filtered.groupby("Empreendimento").size().reset_index(name="Count")
 fig3 = px.bar(
     df_empreendimento,
@@ -430,7 +424,7 @@ fig3 = px.bar(
     y="Count",
     text="Count",
     color_discrete_sequence=["#FFCC99"],
-    labels={"Empreendimento": "", "Count": ""},  # Remove nomes dos eixos
+    labels={"Empreendimento": "", "Count": ""},
 )
 fig3.update_traces(
     marker_line_color="#FF9933",
@@ -438,29 +432,26 @@ fig3.update_traces(
     textposition="inside"
 )
 
-# Remove as linhas horizontais e os números do eixo Y
 fig3.update_layout(
     yaxis=dict(
-        showgrid=False,  # Remove as linhas horizontais
-        showticklabels=False,  # Remove os números do eixo Y
+        showgrid=False,
+        showticklabels=False,
     )
 )
 
 # 4 - Gráfico de Rosca para Status (Improcedente vs Concluída)
-# Filtramos os status de interesse e agrupamos
 df_status_pie = df_filtered[df_filtered["Status"].isin(["Improcedente", "Concluída"])] \
     .groupby("Status").size().reset_index(name="Count")
 
-# Definindo as cores para cada status
 pie_colors = []
 pie_line_colors = []
 for status in df_status_pie["Status"]:
     if status == "Improcedente":
-        pie_colors.append("#D3D3D3")   # Cinza claro
-        pie_line_colors.append("#A9A9A9")  # Cinza escuro
+        pie_colors.append("#D3D3D3")
+        pie_line_colors.append("#A9A9A9")
     elif status == "Concluída":
-        pie_colors.append("#FFCC99")  # Laranja claro
-        pie_line_colors.append("#FF9933")  # Laranja escuro
+        pie_colors.append("#FFCC99")
+        pie_line_colors.append("#FF9933")
 
 fig4 = px.pie(
     df_status_pie,
@@ -478,23 +469,21 @@ fig4.update_traces(
 )
 
 fig4.update_layout(
-    showlegend=False,  # Remove a legenda
+    showlegend=False,
     margin=dict(l=10, r=10, t=30, b=10),
     font=dict(size=12)
 )
 
 # 5 - Gráfico de Barras Horizontais para Status
-# Consideramos os status de interesse
 statuses_interested = ["Improcedente", "Concluída", "Em andamento", "Nova"]
 df_status_bar = df_filtered[df_filtered["Status"].isin(statuses_interested)] \
     .groupby("Status").size().reset_index(name="Count")
 
-# Mapeamento de cores para cada status
 color_map = {
     "Improcedente": {"fill": "#D3D3D3", "border": "#A9A9A9"},
     "Concluída": {"fill": "#FFCC99", "border": "#FF9933"},
-    "Em andamento": {"fill": "#ADD8E6", "border": "#00008B"},  # Azul claro e azul escuro
-    "Nova": {"fill": "#90EE90", "border": "#006400"}            # Verde claro e verde escuro
+    "Em andamento": {"fill": "#ADD8E6", "border": "#00008B"},
+    "Nova": {"fill": "#90EE90", "border": "#006400"}
 }
 
 fig5 = go.Figure()
@@ -513,18 +502,16 @@ for _, row in df_status_bar.iterrows():
          textposition='inside',
          name=status
     ))
-# Opcional: remover a legenda, se não for necessária
 fig5.update_layout(showlegend=False)
 fig5.update_layout(
     xaxis=dict(
-        showgrid=False,      # Remove as linhas do grid
-        showticklabels=False  # Remove os números do eixo X
+        showgrid=False,
+        showticklabels=False
     )
 )
 
 ### Layout em Container com 4 Colunas (proporções 1,3,1,2)
 with st.container():
-    # Primeira linha: Pirâmide (fig1) e Empreendimentos (fig2)
     col1, col2 = st.columns(2)
     with col1:
         st.markdown('### 🟰 Total de Solicitações')
@@ -535,7 +522,6 @@ with st.container():
 
     st.markdown("---")
 
-    # Segunda linha: Rosca (fig3) e Barras Horizontais de Status (fig4)
     col3, col4 = st.columns(2)
     with col3:
         st.markdown('### 🗂️ Situação das Solicitações')
@@ -551,45 +537,42 @@ st.markdown("### 🧮 Solicitações ❌ Acumulado de Chuva ⛈️")
 df_bar = df_filtered.groupby("AnoMes").size().reset_index(name="Count")
 df_combo = pd.merge(df_bar, df_chuva, on="AnoMes", how="left")
 
-# Criar o gráfico de barras com cores ajustadas
 fig6 = px.bar(
     df_combo,
     x="AnoMes",
     y="Count",
     barmode="stack",
     text="Count",
-    color_discrete_sequence=["#D3D3D3"],  # Cinza claro
-    labels={"AnoMes": "", "Count": ""},  # Remove nomes dos eixos
+    color_discrete_sequence=["#D3D3D3"],
+    labels={"AnoMes": "", "Count": ""},
 )
 
 fig6.update_traces(
-    marker_line_color="#808080",  # Cinza escuro para bordas
+    marker_line_color="#808080",
     marker_line_width=1.5,
     textposition="inside"
 )
 
-# Adicionar a linha com cor ajustada e rótulos de dados
 fig6.add_scatter(
     x=df_combo["AnoMes"],
     y=df_combo["Chuva"],
     mode="lines+markers+text",
     name="Acumulado de Chuva",
-    line=dict(color="#D55E00", width=2),  # Laranja escuro
+    line=dict(color="#D55E00", width=2),
     marker=dict(color="#D55E00", size=6),
-    text=df_combo["Chuva"],  # Rótulos de dados
+    text=df_combo["Chuva"],
     textposition="top center"
 )
 
-# Remover grid, labels e valores do eixo Y
 fig6.update_layout(
     yaxis=dict(
         showgrid=False,
-        showticklabels=False  # Remove valores do eixo Y
+        showticklabels=False
     ),
     xaxis=dict(
         showgrid=False
     ),
-    showlegend=False,  # Remove a legenda
+    showlegend=False,
     margin=dict(l=10, r=10, t=30, b=30)
 )
 
@@ -600,52 +583,46 @@ st.markdown("---")
 st.write("### ⚒️ MTTC - Tempo Médio de Conclusão (Por Obra)")
 st.metric("MTTC Geral", f"{mttc:.2f} dias")
 
-# Calcular o MTTC por empreendimento
-mttc_por_obra = df_filtered[df_filtered["Encerramento"].notna()] \
-    .groupby("Empreendimento")["Tempo de Encerramento"].mean() \
-    .reset_index(name="MTTC")
+# --- Alteração realizada: usar a coluna 'Dias em Aberto' para incluir casos em aberto
+mttc_por_obra = df_filtered.groupby("Empreendimento")["Dias em Aberto"].mean().reset_index(name="MTTC")
 
-# Criar esquema de cores pastel
+# Esquema de cores pastel
 cores_principais = px.colors.qualitative.Pastel1  
 
-# Definir bordas um pouco mais escuras para as colunas
 bordas_escurecidas = ["#D4A373", "#A3C4BC", "#9A8C98", "#E9C46A", "#F4A261", "#E76F51", 
-                      "#6D6875", "#4A4E69", "#9B5DE5", "#E63946"]  
+                      "#6D6875", "#4A4E69", "#9B5DE5", "#E63946"]
 
-# Criar gráfico
 fig_mttc = px.bar(
     mttc_por_obra,
     x="Empreendimento",
     y="MTTC",
     color="Empreendimento",
     color_discrete_sequence=cores_principais,
-    text=mttc_por_obra["MTTC"].apply(lambda x: f"{x:.2f}")  # Rótulo com 2 casas decimais
+    text=mttc_por_obra["MTTC"].apply(lambda x: f"{x:.2f}")
 )
 
-# Aplicar bordas escuras manualmente
 for trace, border_color in zip(fig_mttc.data, bordas_escurecidas):
     trace.marker.line.width = 1.5
     trace.marker.line.color = border_color
 
-# Ajustar layout para remover grid, labels e posicionar a legenda à direita
 fig_mttc.update_layout(
     xaxis=dict(
-        showgrid=False,  
-        showticklabels=False,  # Remover labels do eixo X
-        title=""  # Remover título do eixo X
+        showgrid=False,
+        showticklabels=False,
+        title=""
     ),
     yaxis=dict(
-        showgrid=False,  
-        showticklabels=False,  # Remover números do eixo Y
-        title=""  # Remover título do eixo Y
+        showgrid=False,
+        showticklabels=False,
+        title=""
     ),
     legend=dict(
-        orientation="v",  # Mantém a legenda vertical
-        x=1.02,  # Move para a direita
-        y=1, 
-        title=None  # Remove o título "Empreendimento" da legenda
+        orientation="v",
+        x=1.02,
+        y=1,
+        title=None
     ),
-    margin=dict(l=10, r=200, t=30, b=10),  # Ajuste para acomodar a legenda na direita
+    margin=dict(l=10, r=200, t=30, b=10),
 )
 
 st.plotly_chart(fig_mttc, use_container_width=True)
