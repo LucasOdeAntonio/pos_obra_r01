@@ -49,7 +49,8 @@ except Exception as e:
 # ------------------------------------------------------------------------------
 USERS = {
     "lucas.oliveira": "lucas123",
-    "sergio.lopes": "sergio123"
+    "sergio.lopes": "sergio123",
+    "falastin.ady": "falastin123"
 }
 
 # ------------------------------------------------------------------------------
