@@ -26,19 +26,6 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from PIL import Image
 
-
-
-# ================================
-# Autenticação Simples
-# ================================
-USERS = {
-    "lucas.oliveira": "lucas123",
-    "sergio.lopes": "sergio123"  # usuário adicional
-}
-
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-
 # ================================
 # Funções de Pré-processamento e Carregamento
 # ================================
@@ -113,25 +100,25 @@ def main():
         page_title="Pós Obra - Financeiro"
     )
 
-    if not st.session_state["authenticated"]:
-        st.title("Acesso Restrito")
-        user_input = st.text_input("Usuário")
-        password_input = st.text_input("Senha", type="password")
-        if st.button("Entrar"):
-            if user_input in USERS and password_input == USERS[user_input]:
-                st.session_state["authenticated"] = True
-                if hasattr(st, "experimental_rerun"):
-                    st.experimental_rerun()
-                else:
-                    st.success("Login realizado com sucesso!")
-            else:
-                st.error("Usuário ou senha incorretos.")
-        return
+    # -------------------------------
+    # Modo Edição – Solicitado na Sidebar
+    # -------------------------------
+    st.sidebar.header("Modo Edição")
+    if "edit_mode" not in st.session_state:
+        st.session_state["edit_mode"] = False
+
+    usuario_edicao = st.sidebar.text_input("Usuário Edição", key="usuario_edicao")
+    senha_edicao = st.sidebar.text_input("Senha Edição", type="password", key="senha_edicao")
+    if st.sidebar.button("Ativar Modo Edição"):
+        if usuario_edicao == "lucas.oliveira" and senha_edicao == "lucas123":
+            st.session_state["edit_mode"] = True
+            st.sidebar.success("Modo edição ativado.")
+        else:
+            st.sidebar.error("Credenciais inválidas.")
 
     # Exibição dos logos
     logo_horizontal_path = resource_path("LOGO_VR.png")
     logo_reduzida_path   = resource_path("LOGO_VR_REDUZIDA.png")
-
     try:
         logo_horizontal = Image.open(resource_path(logo_horizontal_path))
         logo_reduzida   = Image.open(resource_path(logo_reduzida_path))
@@ -311,92 +298,7 @@ def main():
             st.metric(label="% Atingimento", value=f"{perc:,.2f}%")
         
         st.markdown('-----')
-        # Distribuição de Custo de Mão de Obra por Colaborador
-        st.header("💰 Distribuição de Custo de Mão de Obra por Colaborador")
-        if "Colaborador" in df_admin.columns and "Salário Bruto" in df_admin.columns:
-            df_colab = df_admin[df_admin["Salário Bruto"] > 0].groupby("Colaborador")["Salário Bruto"].sum().reset_index()
-            total_salario = df_colab["Salário Bruto"].sum()
-            df_colab["Percentual (%)"] = (df_colab["Salário Bruto"] / total_salario * 100).round(2)
-            st.subheader("💵Tabela de Custos")
-            st.dataframe(df_colab.style.format({"Salário Bruto": "R${:,.2f}", "Percentual (%)": "{:.2f}%"}))
-            st.subheader("📊 Gráfico de Distribuição - Representação por Colaborador")
-            fig_bar = px.bar(df_colab, x="Colaborador", y="Salário Bruto", text="Percentual (%)",
-                             color="Colaborador", color_discrete_sequence=px.colors.qualitative.Plotly)
-            fig_bar.update_traces(texttemplate='%{text:.2f}%', textposition='outside',
-                                  marker_line_color='black', marker_line_width=2)
-            st.plotly_chart(fig_bar, use_container_width=True)
-
-        else:
-            st.warning("As colunas 'Colaborador' e/ou 'Salário Bruto' não foram encontradas na aba administrativo.")
-        
-        st.markdown('-----')
-        # -------------------------------
-        st.header("📅 Calendário de Contratações Futuras")
-
-        # Carrega os registros onde "Admissão" está vazia (previsões de contratação)
-        df_future = df_admin[df_admin["Admissão"].isna()].copy()
-
-        # Converte 'Previsão Data' para período mensal (string)
-        df_future["Mes"] = df_future["Previsão Data"].dt.to_period("M").astype(str)
-
-        # Cria uma tabela pivot: índice = Colaborador, colunas = Mes, valores = Previsão Mão de Obra
-        pivot_df = df_future.pivot_table(
-            index="Colaborador", 
-            columns="Mes", 
-            values="Previsão Mão de Obra", 
-            aggfunc="sum", 
-            fill_value=0
-        )
-
-        # Cria o Heatmap usando px.imshow
-        # Observação: definimos text_auto=False para podermos inserir nosso próprio texto formatado.
-        fig_heat = px.imshow(
-            pivot_df,
-            aspect="auto",
-            color_continuous_scale="OrRd",
-            labels=dict(color="R$")  # Rótulo do eixo de cores
-        )
-
-        # 1) Formata a colorbar para exibir R$ com duas casas decimais
-        fig_heat.update_layout(
-            coloraxis_colorbar=dict(
-                tickprefix="R$",
-                tickformat=",.2f"
-            )
-        )
-
-        # 2) Formata os valores nas células do heatmap
-        #    Precisamos criar um array de strings formatadas em estilo monetário.
-        import numpy as np
-
-        # Converte cada valor numérico para string "R${valor:,.2f}"
-        df_formatted = pivot_df.applymap(lambda x: f"R${x:,.2f}")
-
-        # Atualiza a camada de trace do Plotly para exibir esses textos nas células
-        fig_heat.update_traces(
-            text=df_formatted.values,    # array 2D com strings formatadas
-            texttemplate="%{text}",      # exibe o valor do campo 'text'
-            textfont_size=10,            # tamanho da fonte dentro das células
-            hovertemplate="R$%{z:,.2f}"  # tooltip ao passar o mouse
-        )
-
-        # Remove rótulos e ticks dos eixos X e Y
-        fig_heat.update_xaxes(
-            side="top",
-            showticklabels=False,
-            showgrid=True,
-            title=None  # Remove título do eixo X
-        )
-        fig_heat.update_yaxes(
-            showticklabels=True,
-            showgrid=False,
-            title=None  # Remove título do eixo Y
-        )
-
-        st.plotly_chart(fig_heat, use_container_width=True)
-
-
-    
+       
     # ============================================================
     # TAB MANUTENÇÃO
     # ============================================================
@@ -444,31 +346,38 @@ def main():
         with st.expander("Tabela de Previsão (Regra Aplicada)", expanded=False):
             st.dataframe(previsao_table.fillna(0).style.format(format_dict), use_container_width=True)
         
+        # Tabela Editável (Ajuste Manual)
         PERSISTENCE_FILE = "maintenance_data.pkl"
         with st.expander("Tabela Editável (Ajuste Manual)", expanded=False):
+            # Carrega ou inicializa a tabela de manutenção
             if os.path.exists(PERSISTENCE_FILE):
                 default_data = pd.read_pickle(PERSISTENCE_FILE)
             else:
                 default_data = previsao_table.fillna(0).copy()
             if "maintenance_data" not in st.session_state:
                 st.session_state["maintenance_data"] = default_data.copy()
-            if st.button("Reset Ajustes", key="reset_button"):
-                st.session_state["maintenance_data"] = previsao_table.fillna(0).copy()
-                st.session_state["maintenance_data"].to_pickle(PERSISTENCE_FILE)
-            if hasattr(st, 'data_editor'):
-                edited_df = st.data_editor(
-                    st.session_state["maintenance_data"],
-                    key="maintenance_editor",
-                    use_container_width=True
-                )
-                st.session_state["maintenance_data"] = edited_df.copy()
-                st.session_state["maintenance_data"].to_pickle(PERSISTENCE_FILE)
+            if st.session_state.get("edit_mode", False):
+                if st.button("Reset Ajustes", key="reset_button"):
+                    st.session_state["maintenance_data"] = previsao_table.fillna(0).copy()
+                    st.session_state["maintenance_data"].to_pickle(PERSISTENCE_FILE)
+                if hasattr(st, 'data_editor'):
+                    edited_df = st.data_editor(
+                        st.session_state["maintenance_data"],
+                        key="maintenance_editor",
+                        use_container_width=True
+                    )
+                    st.session_state["maintenance_data"] = edited_df.copy()
+                    st.session_state["maintenance_data"].to_pickle(PERSISTENCE_FILE)
+                else:
+                    st.warning("Atualize seu Streamlit para a versão que suporta edição interativa.")
+                    st.dataframe(st.session_state["maintenance_data"].style.format(format_dict), use_container_width=True)
             else:
-                st.warning("Atualize seu Streamlit para a versão que suporta edição interativa.")
+                st.info("Ative o Modo Edição na barra lateral para ajustar a tabela manualmente.")
                 st.dataframe(st.session_state["maintenance_data"].style.format(format_dict), use_container_width=True)
             st.write("Tabela Ajustada conforme Planejamento Estratégico:")
             st.dataframe(st.session_state["maintenance_data"].style.format(format_dict), use_container_width=True)
         
+        # Continuação – Gráficos e análises da aba Manutenção
         data_source = st.session_state.get("maintenance_data", previsao_table.fillna(0))
         forecast_summary = {year: data_source[f'Previsão ({year})'].sum() for year in forecast_years} if forecast_years else {}
         forecast_df = pd.DataFrame(list(forecast_summary.items()), columns=['Ano', 'Despesa Planejada'])
@@ -529,7 +438,6 @@ def main():
             empreendimento = row['Empreendimento']
             planejado_val = row['Custo de Construção'] * 0.015
             real_val = 0
-            # Associação: utiliza a coluna "Empreendimento" (aba departamento)
             for serv in df_grd["Cód. Alternativo Serviço"].dropna().unique():
                 serv_clean = serv.strip().upper()
                 if serv_clean == "ADM":
@@ -580,21 +488,14 @@ def main():
         st.markdown('-----')
         st.header("🔎 Consulta Gastos Apropriados")
         
-        # ===================== AJUSTES DOS FILTROS =====================
-        # Converter "Data Documento" para datetime
         df_grd["Data Documento"] = pd.to_datetime(df_grd["Data Documento"], errors='coerce')
-        
-        # Configuração do filtro para Mês: exibir nomes em português
         month_dict = {1:"Janeiro", 2:"Fevereiro", 3:"Março", 4:"Abril", 5:"Maio", 6:"Junho",
-                    7:"Julho", 8:"Agosto", 9:"Setembro", 10:"Outubro", 11:"Novembro", 12:"Dezembro"}
+                      7:"Julho", 8:"Agosto", 9:"Setembro", 10:"Outubro", 11:"Novembro", 12:"Dezembro"}
         unique_month_numbers = sorted(df_grd["Data Documento"].dt.month.dropna().unique())
         month_options = [month_dict[m] for m in unique_month_numbers]
         
-        # Em vez de exibir "### Filtros", exibimos a somatória de Valor Conv. dos dados filtrados
-        # (Os filtros abaixo serão aplicados para atualizar os dados da Consulta Interativa)
         col1, col2, col3 = st.columns(3)
         with col1:
-            # Exibir diretamente os elementos da coluna "Cód. Alternativo Serviço"
             filtro_cod_alt = st.multiselect("Nome do Empreendimento", 
                                             options=sorted(df_grd["Cód. Alternativo Serviço"].dropna().unique()), default=[])
         with col2:
@@ -611,14 +512,11 @@ def main():
         
         col6, col7 = st.columns(2)
         with col6:
-            # Ajuste: usar a coluna "Derscrição Serviço" para o filtro
             filtro_desc_servico = st.multiselect("Tipo de Contratação", options=df_grd["Derscrição Serviço"].unique(), default=[])
         with col7:
             filtro_desc_item = st.multiselect("Descrição do Item", options=df_grd["Descrição Item"].unique(), default=[])
         
-        # ===================== APLICAÇÃO DOS FILTROS =====================
         df_grd_interativo = df_grd.copy()
-        
         if filtro_cod_alt:
             df_grd_interativo = df_grd_interativo[df_grd_interativo["Cód. Alternativo Serviço"].isin(filtro_cod_alt)]
         if filtro_data_mes:
@@ -635,18 +533,14 @@ def main():
         if filtro_desc_item:
             df_grd_interativo = df_grd_interativo[df_grd_interativo["Descrição Item"].isin(filtro_desc_item)]
         
-        # Renomeia algumas colunas para exibição conforme solicitado
         df_grd_interativo = df_grd_interativo.rename(columns={
             "Documento": "NF",
             "Cód. Alternativo Serviço": "Cód Alternativo"
         })
-        
-        # Seleciona somente as colunas necessárias
         cols_exibir = ["Cód Alternativo", "Data Documento", "NF", "Descrição Projeto", 
                     "Descrição Grupo", "Descrição Item", "Derscrição Serviço", "Valor Conv."]
         df_grd_interativo = df_grd_interativo[cols_exibir]
         
-        # Exibe a somatória da coluna Valor Conv. conforme os filtros aplicados
         total_valor_conv = df_grd_interativo["Valor Conv."].sum()
         st.markdown(f"**Total Gasto com PÓS OBRA: R${total_valor_conv:,.2f}**")
         
@@ -655,10 +549,8 @@ def main():
         st.markdown('-----')
         st.header("📊 Gastos por Grupo de Orçamento")
         if not df_grd_interativo.empty:
-            # Agrupar e ordenar (Curva ABC)
             df_grouped = df_grd_interativo.groupby("Descrição Grupo")["Valor Conv."].sum().reset_index()
             df_grouped = df_grouped.sort_values("Valor Conv.", ascending=False)
-            # --- Filtro TOP N ---
             top_n_filter = st.multiselect("TOP N", options=["Top 20", "Top 10", "Top 5"], default=[])
             if top_n_filter:
                 selected_top = min([int(s.split()[1]) for s in top_n_filter])
@@ -696,7 +588,6 @@ def main():
             total_despesa = 0
             custo_unidade_total = 0
 
-        # Definição de valid_enterprises e custo_chamado_total
         if not df_depto_filtered.empty:
             valid_enterprises = df_depto_filtered["Empreendimento"].unique()
             df_calls_filtered = df_engenharia[df_engenharia["Empreendimento"].isin(valid_enterprises)]
@@ -707,7 +598,6 @@ def main():
             valid_enterprises = []
             custo_chamado_total = 0
 
-        # Exibição das métricas (ordem invertida)
         col_metric1, col_metric2, col_metric3 = st.columns(3)
         with col_metric1:
             st.metric("Custo por Unidade", f"R${custo_unidade_total:,.2f}")
@@ -723,7 +613,6 @@ def main():
             df_depto_valid["Custo por Unidade"] = df_depto_valid.apply(
                 lambda row: row["Despesa Manutenção"] / row["N° Unidades"] if row["N° Unidades"] != 0 else 0, axis=1
             )
-            # Ordena do maior para o menor
             df_depto_valid = df_depto_valid.sort_values("Custo por Unidade", ascending=False)
             fig_unidade = px.bar(
                 df_depto_valid,
@@ -749,7 +638,6 @@ def main():
             df_metrics_enterprise["Custo por Chamado"] = df_metrics_enterprise.apply(
                 lambda row: row["Despesa Manutenção"] / row["Chamados"] if row["Chamados"] > 0 else 0, axis=1
             )
-            # Ordena do maior para o menor
             df_metrics_enterprise = df_metrics_enterprise.sort_values("Custo por Chamado", ascending=False)
             
             fig_chamado = px.bar(
@@ -771,7 +659,6 @@ def main():
         st.markdown('-----')
         st.header("⏱️ Distribuição de Despesas por Período")
 
-        # Função para buscar informações na aba departamento considerando somente registros com Status "Assistência Técnica" ou "Fora de Garantia"
         def get_enterprise_info(enterprise):
             matches = df_departamento[
                 (df_departamento["Empreendimento"].str.upper().str.contains(enterprise.upper())) &
@@ -783,11 +670,9 @@ def main():
             else:
                 return None, None
 
-        # Cria as colunas "Data_CVCO_Ref" e "Status_Depto" em df_grd
         df_grd["Data CVCO_Ref"] = df_grd["Cód. Alternativo Serviço"].apply(lambda x: get_enterprise_info(x)[0])
         df_grd["Status_Depto"] = df_grd["Cód. Alternativo Serviço"].apply(lambda x: get_enterprise_info(x)[1])
 
-        # Função para classificar o período com os rótulos desejados
         def classify_period_doc(cvco_date, doc_date):
             if pd.isnull(cvco_date) or pd.isnull(doc_date):
                 return "Sem Data"
@@ -814,7 +699,6 @@ def main():
 
         df_grd["Periodo Doc"] = df_grd.apply(lambda row: classify_period_doc(row["Data CVCO_Ref"], row["Data Documento"]), axis=1)
 
-        # Define as opções de período na ordem desejada
         period_options = [
             "Despesa Pós Entrega",
             "Despesa 1° Ano",
@@ -825,13 +709,11 @@ def main():
             "Despesa Após 5 Anos"
         ]
 
-        # Filtros:
         selected_periods = st.multiselect("Selecione os Períodos", options=period_options, default=[])
         selected_empreendimento_period = st.multiselect("Empreendimento (Filtro)",
             options=sorted(df_grd["Cód. Alternativo Serviço"].dropna().unique()), default=[])
         selected_status_period = st.multiselect("Status (Filtro)", options=["Assistência Técnica", "Fora de Garantia"], default=[])
 
-        # Filtra os dados: forçamos os registros a terem Status "Assistência Técnica" ou "Fora de Garantia" (conforme os dados de departamento)
         df_grd_filtered_period = df_grd[df_grd["Status_Depto"].isin(["Assistência Técnica", "Fora de Garantia"])].copy()
         if selected_periods:
             df_grd_filtered_period = df_grd_filtered_period[df_grd_filtered_period["Periodo Doc"].isin(selected_periods)]
@@ -840,11 +722,9 @@ def main():
         if selected_status_period:
             df_grd_filtered_period = df_grd_filtered_period[df_grd_filtered_period["Status_Depto"].isin(selected_status_period)]
 
-        # Calcula e exibe a somatória dos valores de "Valor Conv." dos dados filtrados
         total_valor_conv_period = df_grd_filtered_period["Valor Conv."].sum()
         st.markdown(f"**Total Gasto por Período: R${total_valor_conv_period:,.2f}**")
 
-        # Gráfico de Gasto Por Período
         df_period_sum = df_grd_filtered_period.groupby("Periodo Doc")["Valor Conv."].sum().reset_index()
         df_period_sum["Periodo Doc"] = pd.Categorical(df_period_sum["Periodo Doc"], categories=period_options, ordered=True)
         df_period_sum = df_period_sum.sort_values("Periodo Doc")
@@ -861,13 +741,11 @@ def main():
             fig_period_doc.update_traces(texttemplate='R$%{text:.2f}', textposition='outside', marker_line_color='black', marker_line_width=1)
         st.plotly_chart(fig_period_doc, use_container_width=True)
 
-        # Tabela de Representatividade: calcula a porcentagem que cada período representa do total
         df_period_sum["Percentual"] = (df_period_sum["Valor Conv."] / df_period_sum["Valor Conv."].sum()) * 100
         df_period_sum["Percentual"] = df_period_sum["Percentual"].apply(lambda x: f"{x:.2f}%")
         st.markdown("#### Representatividade por Período")
         st.dataframe(df_period_sum[["Periodo Doc", "Percentual"]])
 
-        # Gráfico de Gasto Por Período por Empreendimento
         df_period_emp = df_grd_filtered_period.groupby(["Periodo Doc", "Cód. Alternativo Serviço"])["Valor Conv."].sum().reset_index()
         df_period_emp["Periodo Doc"] = pd.Categorical(df_period_emp["Periodo Doc"], categories=period_options, ordered=True)
         df_period_emp = df_period_emp.sort_values("Periodo Doc")
@@ -885,8 +763,6 @@ def main():
             fig_period_emp.update_traces(texttemplate='R$%{text:.2f}', textposition='outside', marker_line_color='black', marker_line_width=1)
         st.plotly_chart(fig_period_emp, use_container_width=True)
 
-        # Novo Gráfico Interativo: Valor Conv. por Grupo
-        # Adiciona um filtro Top N exclusivo para este gráfico (default vazio)
         top_n_filter = st.multiselect("Top N", options=["Top 20", "Top 10", "Top 5"], default=[])
         df_grouped_period = df_grd_filtered_period.groupby("Descrição Grupo")["Valor Conv."].sum().reset_index()
         df_grouped_period = df_grouped_period.sort_values("Valor Conv.", ascending=False)
@@ -914,9 +790,6 @@ def main():
             )
             fig_group_interactive.update_traces(texttemplate="R$%{text:.2f}", textposition="outside", marker_line_color="black", marker_line_width=1)
         st.plotly_chart(fig_group_interactive, use_container_width=True)
-
-
-
 
     # ============================================================
     # TAB PONTO DE EQUILÍBRIO
@@ -1010,25 +883,19 @@ def main():
 
 # ================================
 # Funções auxiliares e load_data()
+# (Repetição intencional para garantir compatibilidade)
 # ================================
 def clean_columns(df):
-    """Remove espaços extras dos nomes das colunas, convertendo-os para string."""
     df.columns = df.columns.astype(str).str.strip().str.replace(r'\s+', ' ', regex=True)
     return df
 
 def converter_data(df, col_list):
-    """Converte as colunas de data para o formato DD/MM/YYYY (datetime)."""
     for col in col_list:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], format='%d/%m/%Y', errors='coerce')
     return df
 
 def parse_month_year(col):
-    """
-    Identifica colunas como 'jan/25', 'fev/25', etc. (texto),
-    convertendo em datetime(2025,1,1), datetime(2025,2,1), etc.
-    Retorna None se não casar.
-    """
     months_map = {
         'jan': 1, 'fev': 2, 'mar': 3, 'abr': 4, 'mai': 5, 'jun': 6,
         'jul': 7, 'ago': 8, 'set': 9, 'out': 10, 'nov': 11, 'dez': 12
@@ -1044,10 +911,6 @@ def parse_month_year(col):
     return None
 
 def load_data():
-    """
-    Carrega as abas “departamento”, “engenharia”, “grd_Listagem” e “administrativo”
-    do arquivo Excel "base2025.xlsx", aplicando os pré-processamentos.
-    """
     xls = pd.ExcelFile(resource_path("base2025.xlsx"))
     df_departamento = pd.read_excel(xls, sheet_name="departamento")
     df_engenharia  = pd.read_excel(xls, sheet_name="engenharia")
