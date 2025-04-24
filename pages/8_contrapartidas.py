@@ -384,6 +384,14 @@ def exibir_form_edicao_inline(idx):
 # ------------------------------------------------------------------------------
 def exibir_cronograma_fisico():
     st.subheader("⏱️Cronograma Físico")
+
+    # ——— Botão para adicionar novo projeto ———
+    if st.session_state.editing_enabled:
+        if st.button("Adicionar Projeto"):
+            adicionar_projeto_callback()
+    st.markdown('')  # opcional: um pequeno espaçamento
+
+
     df = st.session_state.df_principal.copy()
     if df.empty:
         st.info("Nenhum projeto cadastrado. Utilize 'Adicionar Projeto' para incluir.")

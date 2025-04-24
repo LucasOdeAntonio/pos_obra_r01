@@ -8,16 +8,29 @@ import time
 
 def selecionar_todos_registros(driver, wait):
     """
-    Seleciona a opção "Todos" no dropdown de registros por página.
+    Seleciona a opção "Todos" no dropdown de status e clica em 'Filtrar'.
     """
     try:
-        select_element = wait.until(EC.presence_of_element_located((By.XPATH, "//select[@name='tabsolics_length']")))
+        # 1) Localiza o select de status pelo ID
+        select_element = wait.until(
+            EC.presence_of_element_located((By.ID, "cbxstatus"))
+        )
         select = Select(select_element)
-        select.select_by_value("-1")  # Selecionar "Todos"
-        print("[INFO] Filtro 'Todos' aplicado com sucesso.")
+
+        # 2) Seleciona pelo texto visível "Todos"
+        select.select_by_visible_text("Todos")
+        print("[INFO] Opção 'Todos' selecionada com sucesso.")
+
+        # 3) Clica no botão 'Filtrar' para aplicar
+        filtro_btn = wait.until(
+            EC.element_to_be_clickable((By.ID, "btnfiltrasolics"))
+        )
+        filtro_btn.click()
+        print("[INFO] Botão 'Filtrar' clicado com sucesso.")
+
         return True
     except Exception as e:
-        print(f"[ERRO] Falha ao selecionar 'Todos': {e}")
+        print(f"[ERRO] Falha ao aplicar filtro 'Todos' e clicar em Filtrar: {e}")
         return False
 
 def main():
