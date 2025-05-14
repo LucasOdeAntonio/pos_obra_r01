@@ -49,8 +49,6 @@ except Exception as e:
 # ------------------------------------------------------------------------------
 USERS = {
     "lucas.oliveira": "lucas123",
-    "sergio.lopes": "sergio123",
-    "falastin.ady": "falastin123"
 }
 
 # ------------------------------------------------------------------------------
@@ -74,16 +72,13 @@ def formatar_data(data: datetime.date) -> str:
 def gerar_excel_download(df: pd.DataFrame, nome_arquivo: str = "dados_exportados.xlsx") -> str:
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-        # Planilha 1: Dados Base (somente as colunas definidas)
         df[COLUNAS].to_excel(writer, index=False, sheet_name='Dados Base')
-        # Planilha 2: Resumo Financeiro
         df_fin = df.copy()
         df_fin["Saldo"] = df_fin["Orçamento"] - df_fin["Gasto Real"]
         df_fin["% Gasto"] = df_fin.apply(lambda x: round((x["Gasto Real"] / x["Orçamento"]) * 100, 2)
                                          if x["Orçamento"] > 0 else 0, axis=1)
         df_fin_exibir = df_fin[["codigo_sequencia", "Projeto", "Orçamento", "Gasto Real", "Saldo", "% Gasto"]]
         df_fin_exibir.to_excel(writer, index=False, sheet_name='Resumo Financeiro')
-        # Planilha 3: Desembolso Consolidado
         final_df_list = []
         for projeto, df_disp in st.session_state.desembolso.items():
             projeto_df = df[df["Projeto"] == projeto]
@@ -110,9 +105,8 @@ def gerar_excel_download(df: pd.DataFrame, nome_arquivo: str = "dados_exportados
         else:
             df_consol_group = pd.DataFrame()
         df_consol_group.to_excel(writer, index=False, sheet_name='Desembolso Consolidado')
-        # Planilha 4: Resumo Mensal por Projeto
         if not df_consol_group.empty and final_df_list:
-            df_break = df_consol.groupby(["Mês", "Projeto"])["Parcela (R$)"].sum().reset_index()
+            df_break = df_consol.groupby(["Mês", "Projeto"])         ["Parcela (R$)"].sum().reset_index()
             total_by_month = df_break.groupby("Mês")["Parcela (R$)"].transform('sum')
             df_break["Percentual (%)"] = (df_break["Parcela (R$)"] / total_by_month * 100).round(1)
         else:
@@ -124,11 +118,9 @@ def gerar_excel_download(df: pd.DataFrame, nome_arquivo: str = "dados_exportados
 def load_data() -> pd.DataFrame:
     if os.path.exists("contrapartidas.csv"):
         df = pd.read_csv("contrapartidas.csv", sep=";")
-        # Garantir que todas as colunas definidas existam
         for col in COLUNAS:
             if col not in df.columns:
                 df[col] = ""
-        # Converter apenas as colunas de data que permanecem
         date_cols = [
             "Data Início Contrapartida (Previsto)", "Data Término Contrapartida (Previsto)"
         ]
@@ -142,12 +134,8 @@ def load_data() -> pd.DataFrame:
 def persist_data():
     st.session_state.df_principal.to_csv("contrapartidas.csv", index=False, sep=";")
 
-# ------------------------------------------------------------------------------
-# Função para reorganizar os códigos sequenciais
-# ------------------------------------------------------------------------------
 def reorganizar_codigos():
     df = st.session_state.df_principal.copy()
-    # Reorganiza os projetos (id_pai nulo)
     projects = df[df["id_pai"].isnull()].copy().sort_index()
     new_codes = {}
     seq = 1
@@ -156,7 +144,6 @@ def reorganizar_codigos():
         new_codes[df.loc[idx, "Projeto"]] = new_code
         df.loc[idx, "codigo_sequencia"] = new_code
         seq += 1
-    # Reorganiza as subetapas para cada projeto
     subs = df[df["id_pai"].notnull()].copy().sort_index()
     for projeto, code in new_codes.items():
         subs_proj = df[(df["id_pai"].notnull()) & (df["Projeto"] == projeto)]
@@ -169,9 +156,6 @@ def reorganizar_codigos():
     persist_data()
     st.session_state.last_version = df.copy()
 
-# ------------------------------------------------------------------------------
-# Inicialização do State
-# ------------------------------------------------------------------------------
 if "df_principal" not in st.session_state:
     st.session_state.df_principal = load_data()
 if "editing_enabled" not in st.session_state:
@@ -603,7 +587,6 @@ def exibir_cronograma_financeiro():
         st.info("Nenhum dado disponível para o Cronograma Financeiro.")
         return
 
-    # Filtros: Projeto e Status (default vazio)
     projetos_resumo = sorted(df["Projeto"].dropna().unique())
     projetos_filter = st.multiselect("Filtrar por Projeto", options=projetos_resumo, default=[])
     if projetos_filter:
@@ -629,133 +612,168 @@ def exibir_cronograma_financeiro():
     st.write("### 📟Tabela Resumo Financeiro")
     df_fin_exibir = df_fin[["codigo_sequencia", "Projeto", "Orçamento", "Gasto Real", "Saldo", "% Gasto"]]
     st.dataframe(df_fin_exibir)
-    # Gráfico: Viabilidade vs Orçamento vs Gasto Real (agregado por Projeto)
     df_fin_exibir2 = df_fin[["Projeto", "Valor Viabilidade", "Orçamento", "Gasto Real"]]
     df_grouped = df_fin_exibir2.groupby("Projeto", as_index=False).agg({
         "Valor Viabilidade": "max",
         "Orçamento": "sum",
         "Gasto Real": "sum"
     })
+    # ——— Gráfico Viabilidade vs Orçamento vs Gasto Real ———
     fig2 = go.Figure()
     fig2.add_trace(go.Bar(
-        x=df_grouped["Projeto"],
-        y=df_grouped["Valor Viabilidade"],
-        name="Valor Viabilidade",
-        marker_color='#FFDAB9',
-        marker_line_color='#FF8C00',
-        marker_line_width=1,
-        text=df_grouped["Valor Viabilidade"],
-        textposition="auto"
+        x = df_grouped["Projeto"],
+        y = df_grouped["Valor Viabilidade"],
+        name = "Valor Viabilidade",
+        marker_color    = "#FFDAB9",  # Laranja claro
+        marker_line_color = "#FF8C00",  # Borda laranja escuro
+        marker_line_width = 1,
+        text = df_grouped["Valor Viabilidade"],
+        textposition = "auto"
     ))
     fig2.add_trace(go.Bar(
-        x=df_grouped["Projeto"],
-        y=df_grouped["Orçamento"],
-        name="Orçamento",
-        marker_color='#D3D3D3',
-        marker_line_color='#A9A9A9',
-        marker_line_width=1,
-        text=df_grouped["Orçamento"],
-        textposition="auto"
+        x = df_grouped["Projeto"],
+        y = df_grouped["Orçamento"],
+        name = "Orçamento",
+        marker_color    = "#D3D3D3",  # Cinza claro
+        marker_line_color = "#A9A9A9",  # Borda cinza escuro
+        marker_line_width = 1,
+        text = df_grouped["Orçamento"],
+        textposition = "auto"
     ))
     fig2.add_trace(go.Bar(
-        x=df_grouped["Projeto"],
-        y=df_grouped["Gasto Real"],
-        name="Gasto Real",
-        marker_color='#90EE90',
-        marker_line_color='#008000',
-        marker_line_width=1,
-        text=df_grouped["Gasto Real"],
-        textposition="auto"
+        x = df_grouped["Projeto"],
+        y = df_grouped["Gasto Real"],
+        name = "Gasto Real",
+        marker_color    = "#90EE90",  # Verde claro
+        marker_line_color = "#008000",  # Borda verde escuro
+        marker_line_width = 1,
+        text = df_grouped["Gasto Real"],
+        textposition = "auto"
     ))
-    fig2.update_layout(barmode="group", title="🫰 Viabilidade vs Orçamento vs Gasto Real",
-                       xaxis_title="Projeto", yaxis_title="Valor (R$)")
+    fig2.update_layout(
+        barmode = "group",
+        title = "🫰 Viabilidade vs Orçamento vs Gasto Real",
+        xaxis_title = "Projeto",
+        yaxis_title = "Valor (R$)"
+    )
     st.plotly_chart(fig2, use_container_width=True)
     st.markdown('-----')
     exibir_cronograma_desembolso()
 
+# ------------------------------------------------------------------------------
+# Função Ajustada: Cronograma de Desembolso Mensal (Apenas Etapas)
+# ------------------------------------------------------------------------------
 def exibir_cronograma_desembolso():
     st.subheader("💲Cronograma de Desembolso Mensal")
-    df_etapas = st.session_state.df_principal[st.session_state.df_principal["id_pai"].isnull()]
-    if df_etapas.empty:
+
+    df_all = st.session_state.df_principal
+    if df_all.empty:
         st.info("Nenhum projeto disponível para desembolso.")
         return
-    projeto_opcoes = sorted(df_etapas["Projeto"].dropna().unique())
-    projetos_selecionados = st.multiselect("Selecione os Projetos para Desembolso", options=projeto_opcoes, default=[])
+
+    # Lista de todos os projetos (etapas)
+    projetos_opcoes = sorted(df_all["Projeto"].dropna().unique())
+    projetos_selecionados = st.multiselect(
+        "Selecione os Projetos para Desembolso", options=projetos_opcoes
+    )
     if not projetos_selecionados:
-        projetos_selecionados = projeto_opcoes
+        projetos_selecionados = projetos_opcoes
+
     final_df_list = []
     for projeto in projetos_selecionados:
-        with st.expander(f"Cronograma de Desembolso para: {projeto}", expanded=False):
-            if projeto not in st.session_state.desembolso:
-                projeto_record = df_etapas[df_etapas["Projeto"] == projeto].iloc[0]
-                data_inicio = projeto_record["Data Início Contrapartida (Previsto)"]
-                data_termino = projeto_record["Data Término Contrapartida (Previsto)"]
-                if not data_inicio or not data_termino:
-                    st.error(f"O projeto {projeto} não possui datas de contrapartida definidas.")
-                    continue
-                meses = []
-                current = datetime.date(data_inicio.year, data_inicio.month, 1)
-                while current <= datetime.date(data_termino.year, data_termino.month, 1):
-                    meses.append(current)
-                    y = current.year
-                    m = current.month + 1
-                    if m > 12:
-                        m = 1
-                        y += 1
-                    current = datetime.date(y, m, 1)
-                num_meses = len(meses)
-                distrib_default = [round(100/num_meses, 1) for _ in range(num_meses)]
-                st.session_state.desembolso[projeto] = pd.DataFrame({
-                    "Mês": [mes.strftime("%m/%Y") for mes in meses],
-                    "Percentual (%)": distrib_default
+        with st.expander(f"Cronograma de Desembolso para: {projeto}"):
+            # Somente as etapas (id_pai é null)
+            entries = df_all[
+                (df_all["Projeto"] == projeto) &
+                (df_all["id_pai"].isnull())
+            ]
+
+            for _, row in entries.iterrows():
+                codigo = row["codigo_sequencia"]
+                tipo_servico = row.get("Tipo de Serviço", "")
+                key = f"desembolso_{codigo}"
+
+                # Inicializa distribuição se ainda não existir
+                if key not in st.session_state.desembolso:
+                    dt_ini = row["Data Início Contrapartida (Previsto)"]
+                    dt_fim = row["Data Término Contrapartida (Previsto)"]
+                    meses = []
+                    cur = datetime.date(dt_ini.year, dt_ini.month, 1)
+                    while cur <= datetime.date(dt_fim.year, dt_fim.month, 1):
+                        meses.append(cur)
+                        y, m = cur.year, cur.month + 1
+                        if m > 12:
+                            m, y = 1, y + 1
+                        cur = datetime.date(y, m, 1)
+                    default = [round(100/len(meses), 1) for _ in meses]
+                    st.session_state.desembolso[key] = pd.DataFrame({
+                        "Mês": [mes.strftime("%m/%Y") for mes in meses],
+                        "Percentual (%)": default
+                    })
+
+                # Editor de percentuais
+                df_edit = st.data_editor(
+                    st.session_state.desembolso[key].copy(),
+                    num_rows="dynamic",
+                    key=f"distrib_{codigo}",
+                    disabled=not st.session_state.editing_enabled
+                )
+                st.session_state.desembolso[key] = df_edit.copy()
+
+                orc = row.get("Orçamento", 0)
+                perc_list = df_edit["Percentual (%)"].tolist()
+                soma = sum(perc_list)
+                if soma != 100:
+                    perc_list = [round((p/soma)*100, 1) for p in perc_list]
+                parcelas = [round((p/100)*orc, 2) for p in perc_list]
+
+                df_final = pd.DataFrame({
+                    "Mês": df_edit["Mês"],
+                    "Percentual (%)": perc_list,
+                    "Parcela (R$)": parcelas
                 })
-            df_editado = st.data_editor(
-                st.session_state.desembolso[projeto].copy(),
-                num_rows="dynamic",
-                key=f"distrib_{projeto}",
-                disabled=not st.session_state.editing_enabled
-            )
-            st.session_state.desembolso[projeto] = df_editado.copy()
-            projeto_record = df_etapas[df_etapas["Projeto"] == projeto].iloc[0]
-            orcamento = projeto_record["Orçamento"]
-            df_distrib = st.session_state.desembolso[projeto]
-            perc_list = df_distrib["Percentual (%)"].tolist()
-            soma = sum(perc_list)
-            if soma != 100:
-                perc_normalizado = [round((p/soma)*100, 1) for p in perc_list]
-                st.write("**Percentuais normalizados** (soma = 100):", perc_normalizado)
-            else:
-                perc_normalizado = perc_list
-            parcelas = [round((p/100)*orcamento, 2) for p in perc_normalizado]
-            df_final = pd.DataFrame({
-                "Mês": df_distrib["Mês"],
-                "Percentual (%)": perc_normalizado,
-                "Parcela (R$)": parcelas
-            })
-            st.write("### Cronograma de Desembolso Final:")
-            st.dataframe(df_final)
-            fig = px.bar(df_final, x="Mês", y="Parcela (R$)", text="Percentual (%)", title=f"Desembolso Mensal para {projeto}")
-            fig.update_traces(marker_color='gray', marker_line_color='lightgray', marker_line_width=1)
-            st.plotly_chart(fig, use_container_width=True)
-            df_final["Projeto"] = projeto
-            final_df_list.append(df_final)
+                st.write(f"## Etapa {codigo} | {projeto} | {tipo_servico}")
+                st.dataframe(df_final)
+
+                fig = px.bar(
+                    df_final, x="Mês", y="Parcela (R$)", text="Percentual (%)",
+                    title=f"Desembolso Mensal - Etapa {codigo}"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                df_final["Projeto"] = projeto
+                final_df_list.append(df_final)
+
+    # Consolidado geral
     if final_df_list:
         st.markdown('-----')
         st.write("## 💳 Cronograma de Desembolso Consolidado")
         df_consol = pd.concat(final_df_list)
-        df_consol_group = df_consol.groupby("Mês").agg({"Parcela (R$)":"sum"}).reset_index()
-        st.dataframe(df_consol_group)
-        fig_consol = px.bar(df_consol_group, x="Mês", y="Parcela (R$)", text="Parcela (R$)", title="💵 Desembolso Mensal Consolidado")
-        fig_consol.update_traces(marker_color='orange', marker_line_color='lightcoral', marker_line_width=1)
-        st.plotly_chart(fig_consol, use_container_width=True)
+        df_group = df_consol.groupby("Mês").agg({"Parcela (R$)": "sum"}).reset_index()
+        st.dataframe(df_group)
+        fig2 = px.bar(
+            df_group,
+            x="Mês",
+            y="Parcela (R$)",
+            text="Parcela (R$)",
+            title="💵 Desembolso Mensal Consolidado",
+            color_discrete_sequence=["#FFDAB9"]   # laranja claro
+        )
+        fig2.update_traces(
+            marker_line_color="#FF8C00",  # borda laranja escuro
+            marker_line_width=1
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
         st.write("## 🏙️ Resumo Mensal por Projeto")
         df_break = df_consol.groupby(["Mês", "Projeto"])["Parcela (R$)"].sum().reset_index()
-        if not df_break.empty:
-            total_by_month = df_break.groupby("Mês")["Parcela (R$)"].transform('sum')
-            df_break["Percentual (%)"] = (df_break["Parcela (R$)"] / total_by_month * 100).round(1)
-            fig_break = px.bar(df_break, x="Mês", y="Parcela (R$)", color="Projeto",
-                               text="Percentual (%)", title="Resumo Mensal por Projeto", barmode="stack")
-            st.plotly_chart(fig_break, use_container_width=True)
+        total_por_mes = df_break.groupby("Mês")["Parcela (R$)"].transform('sum')
+        df_break["Percentual (%)"] = (df_break["Parcela (R$)"] / total_por_mes * 100).round(1)
+        fig3 = px.bar(
+            df_break, x="Mês", y="Parcela (R$)", color="Projeto", text="Percentual (%)",
+            title="Resumo Mensal por Projeto", barmode="stack"
+        )
+        st.plotly_chart(fig3, use_container_width=True)
 
 # ------------------------------------------------------------------------------
 # Salvamento de Versão (Excel com múltiplas planilhas)
