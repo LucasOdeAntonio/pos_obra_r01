@@ -749,15 +749,33 @@ def exibir_cronograma_desembolso():
         st.markdown('-----')
         st.write("## 💳 Cronograma de Desembolso Consolidado")
         df_consol = pd.concat(final_df_list)
-        df_group = df_consol.groupby("Mês").agg({"Parcela (R$)": "sum"}).reset_index()
+
+        # agrupa e monta o DataFrame
+        df_group = (
+            df_consol
+            .groupby("Mês", as_index=False)
+            .agg({"Parcela (R$)": "sum"})
+        )
+
+        # 1) converte 'Mês' para datetime para ordenar
+        df_group["mes_dt"] = pd.to_datetime(df_group["Mês"], format="%m/%Y")
+
+        # 2) ordena por essa nova coluna
+        df_group = df_group.sort_values("mes_dt")
+
+        # 3) (opcional) remove a coluna auxiliar
+        df_group = df_group.drop(columns="mes_dt")
+
         st.dataframe(df_group)
+
+        # 4) plota com as cores que definimos
         fig2 = px.bar(
             df_group,
             x="Mês",
             y="Parcela (R$)",
             text="Parcela (R$)",
             title="💵 Desembolso Mensal Consolidado",
-            color_discrete_sequence=["#FFDAB9"]   # laranja claro
+            color_discrete_sequence=["#FFDAB9"],    # laranja claro
         )
         fig2.update_traces(
             marker_line_color="#FF8C00",  # borda laranja escuro
@@ -765,13 +783,31 @@ def exibir_cronograma_desembolso():
         )
         st.plotly_chart(fig2, use_container_width=True)
 
+        # ——— Resumo Mensal por Projeto ———
         st.write("## 🏙️ Resumo Mensal por Projeto")
-        df_break = df_consol.groupby(["Mês", "Projeto"])["Parcela (R$)"].sum().reset_index()
-        total_por_mes = df_break.groupby("Mês")["Parcela (R$)"].transform('sum')
+        df_break = (
+            df_consol
+            .groupby(["Mês", "Projeto"])["Parcela (R$)"]
+            .sum()
+            .reset_index()
+        )
+
+        # repete a mesma ordenação
+        df_break["mes_dt"] = pd.to_datetime(df_break["Mês"], format="%m/%Y")
+        df_break = df_break.sort_values("mes_dt").drop(columns="mes_dt")
+
+        total_por_mes = df_break.groupby("Mês")["Parcela (R$)"].transform("sum")
         df_break["Percentual (%)"] = (df_break["Parcela (R$)"] / total_por_mes * 100).round(1)
+
         fig3 = px.bar(
-            df_break, x="Mês", y="Parcela (R$)", color="Projeto", text="Percentual (%)",
-            title="Resumo Mensal por Projeto", barmode="stack"
+            df_break,
+            x="Mês",
+            y="Parcela (R$)",
+            color="Projeto",
+            text="Percentual (%)",
+            title="Resumo Mensal por Projeto",
+            barmode="stack",
+            category_orders={"Mês": df_break["Mês"].unique().tolist()}  # garante a ordem exibida
         )
         st.plotly_chart(fig3, use_container_width=True)
 
