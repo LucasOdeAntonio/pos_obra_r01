@@ -25,6 +25,7 @@ import re
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from PIL import Image
+from io import BytesIO
 
 # ================================
 # Funções de Pré-processamento e Carregamento
@@ -349,33 +350,56 @@ def main():
         # Tabela Editável (Ajuste Manual)
         PERSISTENCE_FILE = "maintenance_data.pkl"
         with st.expander("Tabela Editável (Ajuste Manual)", expanded=False):
+
             # Carrega ou inicializa a tabela de manutenção
             if os.path.exists(PERSISTENCE_FILE):
                 default_data = pd.read_pickle(PERSISTENCE_FILE)
             else:
                 default_data = previsao_table.fillna(0).copy()
+
             if "maintenance_data" not in st.session_state:
                 st.session_state["maintenance_data"] = default_data.copy()
-            if st.session_state.get("edit_mode", False):
-                if st.button("Reset Ajustes", key="reset_button"):
-                    st.session_state["maintenance_data"] = previsao_table.fillna(0).copy()
-                    st.session_state["maintenance_data"].to_pickle(PERSISTENCE_FILE)
-                if hasattr(st, 'data_editor'):
+
+            if st.session_state["edit_mode"]:
+                with st.form("salvar_manutencao"):
                     edited_df = st.data_editor(
                         st.session_state["maintenance_data"],
                         key="maintenance_editor",
                         use_container_width=True
                     )
-                    st.session_state["maintenance_data"] = edited_df.copy()
-                    st.session_state["maintenance_data"].to_pickle(PERSISTENCE_FILE)
-                else:
-                    st.warning("Atualize seu Streamlit para a versão que suporta edição interativa.")
-                    st.dataframe(st.session_state["maintenance_data"].style.format(format_dict), use_container_width=True)
+                    submit = st.form_submit_button("💾 Salvar alterações")
+                    if submit:
+                        st.session_state["maintenance_data"] = edited_df.copy()
+                        st.session_state["maintenance_data"].to_pickle(PERSISTENCE_FILE)
+                        st.success("Alterações salvas!")
             else:
                 st.info("Ative o Modo Edição na barra lateral para ajustar a tabela manualmente.")
-                st.dataframe(st.session_state["maintenance_data"].style.format(format_dict), use_container_width=True)
-            st.write("Tabela Ajustada conforme Planejamento Estratégico:")
-            st.dataframe(st.session_state["maintenance_data"].style.format(format_dict), use_container_width=True)
+                st.dataframe(st.session_state["maintenance_data"].style.format(format_dict),
+                            use_container_width=True)
+            
+        st.write("Tabela Ajustada conforme Planejamento Estratégico:")
+        # Exibe a tabela sem o ícone de download CSV
+        st.table(
+            st.session_state["maintenance_data"]
+            .style.format(format_dict)
+        )
+
+        # ─── botão de download .xlsx ───
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            st.session_state["maintenance_data"].to_excel(
+                writer,
+                index=False,
+                sheet_name="Planejamento"
+            )
+            
+        data = output.getvalue()
+        st.download_button(
+            label="📥 Baixar Planilha (.xlsx)",
+            data=data,
+            file_name="Tabela_Ajustada_Planejamento.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         
         # Continuação – Gráficos e análises da aba Manutenção
         data_source = st.session_state.get("maintenance_data", previsao_table.fillna(0))
@@ -389,6 +413,7 @@ def main():
             columns={'Ano_Doc': 'Ano', 'Valor Conv.': 'Despesa Real'}
         )
         st.markdown('-----')
+
         st.header('🛒 Despesas em Manutenção (Anual)')
         real_by_year = real_by_year[real_by_year['Ano'] >= 2025]
         despesa_df = pd.merge(forecast_df, real_by_year, on='Ano', how='outer').fillna(0)
@@ -546,6 +571,35 @@ def main():
         
         st.dataframe(df_grd_interativo, use_container_width=True)
         
+    if not df_grd_interativo.empty:
+        # agrupa por Mês/Ano
+        df_grd_interativo['Mes_Ano'] = df_grd_interativo['Data Documento'].dt.to_period('M').dt.to_timestamp()
+        df_mes = (
+            df_grd_interativo
+            .groupby('Mes_Ano')['Valor Conv.']
+            .sum()
+            .reset_index()
+            .sort_values('Mes_Ano')
+        )
+        # formata rótulos Mês/Ano
+        df_mes['Mes_Ano_str'] = df_mes['Mes_Ano'].dt.strftime('%b/%y')
+
+        # monta gráfico
+        fig_periodo = px.bar(
+            df_mes,
+            x='Mes_Ano_str',
+            y='Valor Conv.',
+            labels={'Mes_Ano_str': 'Período (Mês/Ano)', 'Valor Conv.': 'Valor (R$)'},
+            title='Gastos Mensais (filtrados)',
+            text=df_mes['Valor Conv.'].apply(lambda v: f"R${v:,.2f}")
+        )
+        fig_periodo.update_layout(
+            xaxis=dict(tickangle=-45),
+            uniformtext_minsize=8,
+            uniformtext_mode='hide'
+        )
+        st.plotly_chart(fig_periodo, use_container_width=True, key="fig_periodo")
+
         st.markdown('-----')
         st.header("📊 Gastos por Grupo de Orçamento")
         if not df_grd_interativo.empty:

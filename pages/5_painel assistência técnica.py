@@ -23,6 +23,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, date
 from PIL import Image
+from io import BytesIO
 
 # =============================================================================
 # Função para normalizar os nomes das colunas (remove espaços extras)
@@ -375,6 +376,99 @@ fig1.update_layout(
 )
 
 st.plotly_chart(fig1, use_container_width=True)
+
+# === Gráfico de Unidades em Garantia por Mês/Ano ===
+# 1) Prepara df apenas com Data Entrega e Nº Unidades
+df_war = df_dep_renamed[["Data Entrega de Obra", "N° Unidades"]].dropna()
+
+# 2) Calcula data de fim de garantia (+60 meses)
+df_war["FimGarantia"] = df_war["Data Entrega de Obra"] + pd.DateOffset(months=60)
+
+# 3) Gera para cada obra a lista de períodos (AnoMes) em garantia e explode
+df_war["AnoMes"] = df_war.apply(
+    lambda r: pd.period_range(r["Data Entrega de Obra"], r["FimGarantia"], freq="M"),
+    axis=1
+)
+df_war = df_war.explode("AnoMes")
+df_war["AnoMes"] = df_war["AnoMes"].astype(str)
+
+# 4) Agrupa somando unidades por AnoMes
+df_war_sum = (
+    df_war
+    .groupby("AnoMes", as_index=False)["N° Unidades"]
+    .sum()
+)
+
+# 5) Desenha o gráfico
+fig_war = px.bar(
+    df_war_sum,
+    x="AnoMes",
+    y="N° Unidades",
+    labels={"AnoMes": "", "N° Unidades": ""},
+    title="🛡️ Unidades em Garantia por Mês/Ano"
+)
+st.plotly_chart(fig_war, use_container_width=True)
+
+# === Gráfico Simplificado: Máximo de Unidades em Garantia por Ano ===
+# 1) Extrai o ano de AnoMes
+df_war_sum["Ano"] = df_war_sum["AnoMes"].str.slice(0, 4)
+
+# 2) Agrupa pegando o valor máximo de unidades por ano
+df_max_year = (
+    df_war_sum
+    .groupby("Ano", as_index=False)["N° Unidades"]
+    .max()
+)
+
+# 3) Plota o gráfico
+fig_max_year = px.bar(
+    df_max_year,
+    x="Ano",
+    y="N° Unidades",
+    labels={"Ano": "Ano", "N° Unidades": "Unidades (Máx)"},
+    title="📊 Máximo de Unidades em Garantia por Ano"
+)
+st.plotly_chart(fig_max_year, use_container_width=True)
+
+# === Tabela: Chamados por Unidade por Empreendimento ===
+# (0) cria df intermediário excluindo empreendimentos “Em Obra”
+df_calc = df_filtered[df_filtered["Status"] != "Em Obra"]
+
+# (1) conta total de chamados por empreendimento só para quem NÃO está “Em Obra”
+df_chamados = (
+    df_calc
+    .groupby("Empreendimento")
+    .size()
+    .reset_index(name="TotalChamados")
+)
+
+# (2) puxa N° Unidades e calcula razão
+df_dep_unidades = df_dep_renamed[["Empreendimento", "N° Unidades"]]
+df_table = df_chamados.merge(df_dep_unidades, on="Empreendimento", how="left")
+df_table["ChamadosPorUnidade"] = df_table["TotalChamados"] / df_table["N° Unidades"]
+
+# (3) exibe tabela e média
+st.markdown("### 📋 Chamados / Unidade por Empreendimento")
+st.table(df_table[["Empreendimento", "ChamadosPorUnidade"]].round(2))
+total_chamados = df_table["TotalChamados"].sum()
+total_unidades  = df_table["N° Unidades"].sum()
+media_global    = total_chamados / total_unidades
+
+# — Exibe média para 5 anos
+st.markdown(f"**Média Global de Chamados/Unidade:** {media_global:.2f} _(Média p/ período de 5 anos)_")
+
+# — Calcula e exibe média anual por unidade
+media_anual = media_global / 5
+st.markdown(f"**Média Global de Chamados/Unidade (por ano):** {media_anual:.2f}")
+
+# — Monta a tabela de previsão de chamados por ano
+# (reusa df_max_year, que contém "Ano" e "N° Unidades")
+df_forecast = df_max_year.copy()
+df_forecast["Previsão de Chamados"] = (df_forecast["N° Unidades"] * media_anual).round(2)
+
+st.markdown("### 📅 Previsão de Chamados por Ano")
+st.table(df_forecast[["Ano", "Previsão de Chamados"]])
+
 st.markdown("---")
 
 # 2 - Gráfico de Pirâmide (por ano)
@@ -580,11 +674,15 @@ st.plotly_chart(fig6, use_container_width=True)
 st.markdown("---")
 
 # 7 – MTTC – Tempo Médio de Conclusão (Por Obra)
-st.write("### ⚒️ MTTC - Tempo Médio de Conclusão (Por Obra)")
-st.metric("MTTC Geral", f"{mttc:.2f} dias")
+mttc_por_obra = df_filtered.groupby("Empreendimento")["Dias em Aberto"] \
+    .mean() \
+    .reset_index(name="MTTC")
 
-# --- Alteração realizada: usar a coluna 'Dias em Aberto' para incluir casos em aberto
-mttc_por_obra = df_filtered.groupby("Empreendimento")["Dias em Aberto"].mean().reset_index(name="MTTC")
+# MTTC Geral agora é a média dos MTTCs por obra
+mttc_geral_filtrado = mttc_por_obra["MTTC"].mean()
+
+st.write("### ⚒️ MTTC - Tempo Médio de Conclusão (Por Obra)")
+st.metric("MTTC Geral", f"{mttc_geral_filtrado:.2f} dias")
 
 # Esquema de cores pastel
 cores_principais = px.colors.qualitative.Pastel1  
