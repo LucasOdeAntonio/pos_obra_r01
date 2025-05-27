@@ -450,21 +450,45 @@ df_table["ChamadosPorUnidade"] = df_table["TotalChamados"] / df_table["N° Unida
 # (3) exibe tabela e média
 st.markdown("### 📋 Chamados / Unidade por Empreendimento")
 st.table(df_table[["Empreendimento", "ChamadosPorUnidade"]].round(2))
+
+# — (1) Total de Chamados e Unidades (permanece igual)
 total_chamados = df_table["TotalChamados"].sum()
-total_unidades  = df_table["N° Unidades"].sum()
-media_global    = total_chamados / total_unidades
+total_unidades = df_table["N° Unidades"].sum()
+media_global   = total_chamados / total_unidades
 
-# — Exibe média para 5 anos
-st.markdown(f"**Média Global de Chamados/Unidade:** {media_global:.2f} _(Média p/ período de 5 anos)_")
+# — (2) Calcula o número exato de anos do período
+start_year   = df_filtered["Data de Abertura"].dt.year.min()
+end_year     = df_filtered["Data de Abertura"].dt.year.max()
+numero_anos  = end_year - start_year + 1
 
-# — Calcula e exibe média anual por unidade
-media_anual = media_global / 5
-st.markdown(f"**Média Global de Chamados/Unidade (por ano):** {media_anual:.2f}")
+# (3a) Limita df_max_year apenas aos anos em que há chamadas
+anos_chamadas = list(range(start_year, end_year + 1))
+df_max_year_filtrado = df_max_year[
+    df_max_year["Ano"].astype(int).isin(anos_chamadas)
+]
 
-# — Monta a tabela de previsão de chamados por ano
-# (reusa df_max_year, que contém "Ano" e "N° Unidades")
+# (3b) Agora calcula a média de unidades exatamente nesse intervalo
+media_unidades = df_max_year_filtrado["N° Unidades"].mean()
+
+# — (4) Cálculos finais corrigidos
+chamados_por_ano            = total_chamados / numero_anos
+media_chamados_unidade_ano  = chamados_por_ano / media_unidades
+
+# — (5) Exibe Métricas
+st.markdown(
+    f"**Média Global de Chamados/Unidade:** "
+    f"{media_global:.2f} _(Média p/ período de {numero_anos} anos)_"
+)
+st.markdown(
+    f"**Média Global de Chamados/Unidade (por ano):** "
+    f"{media_chamados_unidade_ano:.2f}"
+)
+
+# — (6) Previsão de Chamados por Ano usando a métrica corrigida
 df_forecast = df_max_year.copy()
-df_forecast["Previsão de Chamados"] = (df_forecast["N° Unidades"] * media_anual).round(2)
+df_forecast["Previsão de Chamados"] = (
+    df_forecast["N° Unidades"] * media_chamados_unidade_ano
+).round(2)
 
 st.markdown("### 📅 Previsão de Chamados por Ano")
 st.table(df_forecast[["Ano", "Previsão de Chamados"]])

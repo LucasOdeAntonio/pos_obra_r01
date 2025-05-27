@@ -571,16 +571,16 @@ def main():
         
         st.dataframe(df_grd_interativo, use_container_width=True)
         
-    if not df_grd_interativo.empty:
-        # agrupa por Mês/Ano
-        df_grd_interativo['Mes_Ano'] = df_grd_interativo['Data Documento'].dt.to_period('M').dt.to_timestamp()
-        df_mes = (
-            df_grd_interativo
-            .groupby('Mes_Ano')['Valor Conv.']
-            .sum()
-            .reset_index()
-            .sort_values('Mes_Ano')
-        )
+        if not df_grd_interativo.empty:
+            # agrupa por Mês/Ano
+            df_grd_interativo['Mes_Ano'] = df_grd_interativo['Data Documento'].dt.to_period('M').dt.to_timestamp()
+            df_mes = (
+                df_grd_interativo
+                .groupby('Mes_Ano')['Valor Conv.']
+                .sum()
+                .reset_index()
+                .sort_values('Mes_Ano')
+            )
         # formata rótulos Mês/Ano
         df_mes['Mes_Ano_str'] = df_mes['Mes_Ano'].dt.strftime('%b/%y')
 
