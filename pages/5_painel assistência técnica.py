@@ -637,7 +637,6 @@ with st.container():
     with col2:
         st.markdown('### 🏙️ Solicitações Por Empreendimento')
         st.plotly_chart(fig3, use_container_width=True)
-
     st.markdown("---")
 
     col3, col4 = st.columns(2)
